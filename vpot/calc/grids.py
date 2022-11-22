@@ -6,22 +6,6 @@ from .mol import myMolecule
 from .potential import vpot
 
 
-def optimizeBasis(grid):
-    start = time.perf_counter()
-    VMat, resis,_,_ = np.linalg.lstsq(grid.phi, -vpot(grid.mol.geom,
-                                                      grid.mol.elez,
-                                                      grid.points),rcond=-1)
-
-    mints = psi4.core.MintsHelper(grid.mol.basisSet)
-    X =mints.ao_overlap().np
-    for c1,i in enumerate(VMat):
-        X[c1,c1] = i
-
-    logging.info(f"resis : {resis} ")
-    logging.info(f"optimizeBasis time: {time.perf_counter()-start:10.2f} s")
-    return X
-
-
 def genCube(mol, centeredAroundOrigin=False, thresh=5.0):
     """
     Place the molecule in a cube and return the coordinates
@@ -73,7 +57,6 @@ def genCube(mol, centeredAroundOrigin=False, thresh=5.0):
 
     return cube
 
-
 class myGrid(object):
     def __init__(self, mol : myMolecule):
         self.mol = mol
@@ -86,8 +69,37 @@ class myGrid(object):
         #Shape (N,K)
         self.phi    = None
 
+    def optimizeBasis(self):
+        start = time.perf_counter()
+        VMat, resis,_,_ = np.linalg.lstsq(self.phi, -vpot(self.mol.geom,
+                                                      self.mol.elez,
+                                                      self.points),rcond=-1)
 
-    def genSphericalGrid(self,
+        mints = psi4.core.MintsHelper(self.mol.basisSet)
+        X =mints.ao_overlap().np
+        for c1,i in enumerate(VMat):
+            X[c1,c1] = i
+
+        logging.info(f"resis : {resis} ")
+        logging.info(f"optimizeBasis time: {time.perf_counter()-start:10.2f} s")
+        return X
+
+
+
+
+
+class sphericalGrid(myGrid):
+    def __init__(self,mol: myMolecule,
+                minDist: float=0.25,
+                maxDist: float=7.5,
+                nRadial: int=250S, 
+                nSphere: int=974,
+                radialScheme: str  = "BECKE",
+                pruningScheme: str = "TREUTLER"):
+        myGrid.__init__(self,mol)
+        self._genSphericalGrid(minDist,maxDist,nRadial,nSphere,radialScheme,pruningScheme)
+
+    def _genSphericalGrid(self,
                     minDist: float=0.25,
                     maxDist: float=7.5,
                     nRadial: int=75, 
@@ -159,14 +171,28 @@ class myGrid(object):
         self.gridInfo["nPoints"] = len(self.points)
         self.gridInfo["radialScheme"]  = radialScheme
         self.gridInfo["pruningScheme"] = pruningScheme
-        
-        
 
+    
 
-    def genBlockGrid(self, 
+class blockGrid(myGrid):
+
+    def __init__(self, 
+                 mol: myMolecule,
+                 gridSpacing: float=0.2,
+                 minDist: float=0.25,
+                 maxDist: float=7.5,
+                 centeredAroundOrigin=False
+                 ):
+        myGrid.__init__(self,mol)
+
+        self.cube = genCube(self.mol,centeredAroundOrigin=False,thresh=maxDist)
+        self._genBlockGrid(self.cube,gridSpacing,minDist)
+
+    def _genBlockGrid(self, 
                      cube: dict,
                      gridSpacing: float = 0.2,
-                     minDist: float = 0.25):
+                     minDist: float = 0.25,
+                     ):
         
         mol = self.mol
 
@@ -235,21 +261,18 @@ class myGrid(object):
 
 if __name__ == "__main__":
     
-    logging.basicConfig(filename='grids.log', level=logging.DEBUG)
+    logging.basicConfig(filename='grids.log', level=logging.DEBUG,filemode="w")
     M = myMolecule("tests/6-QM7/1.xyz","def2-TZVP")
-    G = myGrid(M)
-    G.genSphericalGrid(maxDist=5.0,nSphere=2702)
+    G = sphericalGrid(M,maxDist=5.0,nSphere=2702)
     logging.info(f"{G.gridInfo}")
-    V1 = optimizeBasis(G)
+    V1 = G.optimizeBasis()
     logging.info(f"{G.gridInfo}")
     logging.info(V1)
 
-    c = genCube(M,thresh=7.5)
-    G.genBlockGrid(c,minDist=0.2,gridSpacing=0.15)
-    V2 = optimizeBasis(G,)
+    G2 = blockGrid(M,minDist=0.2,gridSpacing=0.15)
+    V2 = G2.optimizeBasis()
     logging.info(V2)
 
-    c = genCube(M,centeredAroundOrigin="True",thresh=7.5)
-    G.genBlockGrid(c)
-    V3 = optimizeBasis(G)
+    G3 = blockGrid(M,minDist=0.2,gridSpacing=0.15,centeredAroundOrigin=True)
+    V3 = G3.optimizeBasis()
     logging.info(V3)

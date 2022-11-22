@@ -1,5 +1,6 @@
-from .grids import myGrid
+from .grids import blockGrid, sphericalGrid
 from .mol import myMolecule
-from .grids import optimizeBasis
 
-__all__= ["myGrid","myMolecule"]
+__all__= ["myMolecule",
+          "sphericalGrid",
+          "blockGrid"]
