@@ -1,6 +1,7 @@
 import psi4
 from ase.io import read 
 from ase.atoms import Atoms
+import numpy as np
 
 
 class myMolecule(object):
@@ -18,9 +19,32 @@ class myMolecule(object):
 
         wfn = psi4.core.Wavefunction.build(mol, basisString)
         mints = psi4.core.MintsHelper(wfn.basisset())
+        self.xyzFile = xyzFile
+        self.basisString = basisString
         self.geom, self.mass, self.elem, self.elez, self.uniq = mol.to_arrays()
 
+        #get center of mass, good for plotting
+        self.com = self.mass @ self.geom / self.mass.sum()
+        self.nElectrons = np.sum(self.elez)
+        self.ao_pot = mints.ao_potential().np
+
+
+
         self.basisSet = wfn.basisset()
+
+
+    def runPSI4(self,method : str):
+        
+        psi4.geometry(f"""
+            {self._readXYZFile(self.xyzFile)}
+            symmetry c1
+            nocom
+            noreorient
+            """)
+        E,wfn = psi4.energy(f"{method}/{self.basisString}", return_wfn=True)
+
+        return E,wfn
+
 
 
 

@@ -92,8 +92,8 @@ class sphericalGrid(myGrid):
     def __init__(self,mol: myMolecule,
                 minDist: float=0.25,
                 maxDist: float=7.5,
-                nRadial: int=250S, 
-                nSphere: int=974,
+                nRadial: int=75, 
+                nSphere: int=302,
                 radialScheme: str  = "BECKE",
                 pruningScheme: str = "TREUTLER"):
         myGrid.__init__(self,mol)
@@ -109,6 +109,7 @@ class sphericalGrid(myGrid):
         """
         Some docs
         """
+        start = time.perf_counter()
         mol = self.mol
 
         delta = 0.01
@@ -123,9 +124,14 @@ class sphericalGrid(myGrid):
         Vpot       = psi4.core.VBase.build(mol.basisSet, functional, "RV")
         Vpot.initialize()
 
+        
+        """
         x, y, z, w = Vpot.get_np_xyzw()
-        Pts = np.array([[i,j,k,l] for i,j,k,l in zip(x,y,z,w) ])
 
+        logging.info(f"genSphereTime -T1.1: {time.perf_counter()-start:10.2f} s")
+        Pts = np.array([[i,j,k,l] for i,j,k,l in zip(x,y,z,w) ])
+        logging.info(f"genSphereTime -T1.2: {time.perf_counter()-start:10.2f} s")
+        
         tmpPts = []
         for i in Pts:
             if (np.min([np.linalg.norm(i[:3]-x) for x in mol.geom]) > minDist) and (np.min([np.linalg.norm(i[:3]-x) for x in mol.geom]) < maxDist):
@@ -133,10 +139,22 @@ class sphericalGrid(myGrid):
 
         logging.info(f"Before filter: {len(Pts)} after filter: {len(tmpPts)}")
         Pts = np.array(tmpPts)
+        logging.info(f"genSphereTime T2: {time.perf_counter()-start:10.2f} s")
+        """
+
+        P       = np.array(Vpot.get_np_xyzw()).transpose()
+        Dist    = np.array([np.linalg.norm(P[:,:3] - x,axis=1) for x in mol.geom]).transpose()
+        Dmin    = np.min(Dist,axis=1)
+        Pts     = P[np.where((Dmin>minDist) & (Dmin < maxDist))]
+
+
+        logging.info(f"genSphereTime T2: {time.perf_counter()-start:10.2f} s")
+
 
         for c,i in enumerate(mol.geom):
             logging.info(f"radii  : {sorted(list(set(np.round(np.linalg.norm(Pts[:,:3]-i,axis=1),decimals=2))))}); {len(set(np.round(np.linalg.norm(Pts[:,:3]-i,axis=1),decimals=2)))}")
 
+        logging.info(f"genSphereTime T3: {time.perf_counter()-start:10.2f} s")
 
         xs = psi4.core.Vector.from_array(Pts[:,0])
         ys = psi4.core.Vector.from_array(Pts[:,1])
@@ -171,6 +189,7 @@ class sphericalGrid(myGrid):
         self.gridInfo["nPoints"] = len(self.points)
         self.gridInfo["radialScheme"]  = radialScheme
         self.gridInfo["pruningScheme"] = pruningScheme
+        logging.info(f"genSphereTime: {time.perf_counter()-start:10.2f} s")
 
     
 
@@ -186,12 +205,13 @@ class blockGrid(myGrid):
         myGrid.__init__(self,mol)
 
         self.cube = genCube(self.mol,centeredAroundOrigin=False,thresh=maxDist)
-        self._genBlockGrid(self.cube,gridSpacing,minDist)
+        self._genBlockGrid(self.cube,gridSpacing,minDist,maxDist)
 
     def _genBlockGrid(self, 
                      cube: dict,
                      gridSpacing: float = 0.2,
                      minDist: float = 0.25,
+                     maxDist: float = 7.5
                      ):
         
         mol = self.mol
@@ -207,12 +227,15 @@ class blockGrid(myGrid):
 
         logging.info(f"xdim: {len(xdim)}, ydim: {len(ydim)}, zdim: {len(zdim)}")
 
-        Pts = np.array([[i,j,k] for i in xdim
+        P = np.array([[i,j,k] for i in xdim
                                 for j in ydim 
                                 for k in zdim])
 
+        Dist    = np.array([np.linalg.norm(P[:,:3] - x,axis=1) for x in mol.geom]).transpose()
+        Dmin    = np.min(Dist,axis=1)
+        Pts     = P[np.where((Dmin>minDist) & (Dmin < maxDist))]
 
-
+        """
         tmpPts = []
         for i in Pts:
             if (np.min([np.linalg.norm(i[:3]-x) for x in mol.geom]) > minDist):
@@ -220,7 +243,7 @@ class blockGrid(myGrid):
 
         logging.info(f"Before filter: {len(Pts)} after filter: {len(tmpPts)}")
         Pts = np.array(tmpPts)
-
+        """
         xs = psi4.core.Vector.from_array(Pts[:,0])
         ys = psi4.core.Vector.from_array(Pts[:,1])
         zs = psi4.core.Vector.from_array(Pts[:,2])
