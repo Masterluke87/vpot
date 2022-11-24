@@ -1,9 +1,10 @@
 import psi4
 import logging
 import numpy as np
+from matplotlib import pyplot as plt
 import time
 from .mol import myMolecule
-from .potential import vpot
+from .potential import vpot,vBpot
 
 
 def genCube(mol, centeredAroundOrigin=False, thresh=5.0):
@@ -83,6 +84,37 @@ class myGrid(object):
         logging.info(f"resis : {resis} ")
         logging.info(f"optimizeBasis time: {time.perf_counter()-start:10.2f} s")
         return X
+
+    def exportErrorVsDistance(self,V,mode :str ="min", pltLabel: str= "", path : str ="",plotPot:bool=False):
+        
+        Error = vBpot(self.phi,V.diagonal()) - vpot(self.mol.geom,self.mol.elez,self.points)
+        if mode=="com":
+            Dists = np.array([np.linalg.norm(self.points - self.mol.com,axis=1)]).transpose()
+        if mode=="min":
+            Dists = np.min(np.array([np.linalg.norm(self.points - x,axis=1) for x in self.mol.geom]).transpose(),axis=1)
+        plt.plot(Dists,Error,"o",markersize=0.6,label=pltLabel)
+        plt.ylabel("Error wrt. exact potential [a.u.]")
+        plt.xlabel("Distance to neareast nuclei [a.u.]")
+      
+        if plotPot:
+            ax2 = plt.gca().twinx()
+            ax2.plot(Dists,vpot(self.mol.geom,self.mol.elez,self.points),"o",color="red",markersize=0.6,label="Potential")           
+            ax2.set_ylabel("Potential [a.u.]")
+        
+        if path:
+            plt.savefig(f"{path}")
+            plt.clf()
+        
+        
+
+
+
+    def printStats(self, V):
+        logging.info(f"GridInfo : {self.gridInfo} ")
+        logging.info(f"residue  : {np.sum(np.square((vBpot(self.phi,V.diagonal()) - vpot(self.mol.geom ,self.mol.elez,self.points))))}")
+        logging.info(f"MeanError: {np.mean(np.square((vBpot(self.phi,V.diagonal()) - vpot(self.mol.geom,self.mol.elez,self.points))))}")
+        logging.info(f"MaxError : {np.max(np.square((vBpot(self.phi,V.diagonal()) - vpot(self.mol.geom ,self.mol.elez,self.points))))}")
+        logging.info(f"MinError : {np.min(np.square((vBpot(self.phi,V.diagonal()) - vpot(self.mol.geom ,self.mol.elez,self.points))))}")
 
 
 

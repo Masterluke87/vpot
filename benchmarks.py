@@ -4,23 +4,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 import logging
 
-def printStats(grid,V):
-    logging.info(f"GridInfo : {grid.gridInfo} ")
-    logging.info(f"residue  : {np.sum(np.square((vBpot(grid.phi,V.diagonal()) - vpot(grid.mol.geom,grid.mol.elez,grid.points))))}")
-    logging.info(f"MeanError: {np.mean(np.square((vBpot(grid.phi,V.diagonal()) - vpot(grid.mol.geom,grid.mol.elez,grid.points))))}")
-    logging.info(f"MaxError : {np.max(np.square((vBpot(grid.phi,V.diagonal()) - vpot(grid.mol.geom,grid.mol.elez,grid.points))))}")
-    logging.info(f"MinError : {np.min(np.square((vBpot(grid.phi,V.diagonal()) - vpot(grid.mol.geom,grid.mol.elez,grid.points))))}")
 
-
-def distanceVSerror(grid,V, mode="com",pltLabel=""):
-    Error = vBpot(grid.phi,V.diagonal()) - vpot(grid.mol.geom,grid.mol.elez,grid.points)
-    if mode=="com":
-        Dists = np.array([np.linalg.norm(grid.points - grid.mol.com,axis=1)]).transpose()
-    if mode=="min":
-        Dists = np.min(np.array([np.linalg.norm(grid.points - x,axis=1) for x in grid.mol.geom]).transpose(),axis=1)
-
-    
-    plt.plot(Dists,Error,"o",markersize=0.6,label=pltLabel)
 
 
 def testAlrichsBasis():
@@ -31,33 +15,33 @@ def testAlrichsBasis():
     M = myMolecule("tests/6-QM7/1218.xyz","def2-SVP")
     Gs = sphericalGrid(M,maxDist=4.5)   
     Vs = Gs.optimizeBasis()
-    printStats(Gs,Vs)
-    distanceVSerror(Gs,Vs,mode=mode,pltLabel="def2-SVP")
+    Gs.printStats(Vs)
+    Gs.exportErrorVsDistance(Vs,mode=mode,pltLabel="def2-SVP")
     
     M = myMolecule("tests/6-QM7/1218.xyz","def2-TZVP")
     Gs = sphericalGrid(M,maxDist=4.5)   
     Vs = Gs.optimizeBasis()
-    printStats(Gs,Vs)
-    distanceVSerror(Gs,Vs,mode=mode,pltLabel="def2-TZVP")
+    Gs.printStats(Vs)
+    Gs.exportErrorVsDistance(Vs,mode=mode,pltLabel="def2-TZVP")
 
 
     M = myMolecule("tests/6-QM7/1218.xyz","def2-TZVPD")
     Gs = sphericalGrid(M,maxDist=4.5)   
     Vs = Gs.optimizeBasis()
-    printStats(Gs,Vs)
-    distanceVSerror(Gs,Vs,mode=mode,pltLabel="def2-TZVPD")
+    Gs.printStats(Vs)
+    Gs.exportErrorVsDistance(Vs,mode=mode,pltLabel="def2-TZVPD")
 
     M = myMolecule("tests/6-QM7/1218.xyz","def2-QZVP")
     Gs = sphericalGrid(M,maxDist=4.5)   
     Vs = Gs.optimizeBasis()
-    printStats(Gs,Vs)
-    distanceVSerror(Gs,Vs,mode=mode,pltLabel="def2-QZVP")
+    Gs.printStats(Vs)
+    Gs.exportErrorVsDistance(Vs,mode=mode,pltLabel="def2-QZVP")
 
     M = myMolecule("tests/6-QM7/1218.xyz","def2-QZVPD")
     Gs = sphericalGrid(M,maxDist=4.5)   
     Vs = Gs.optimizeBasis()
-    printStats(Gs,Vs)
-    distanceVSerror(Gs,Vs,mode=mode,pltLabel="def2-QZVPD")
+    Gs.printStats(Vs)
+    Gs.exportErrorVsDistance(Vs,mode=mode,pltLabel="def2-QZVPD")
 
 
     if mode=="com":
@@ -78,34 +62,34 @@ def testDunningBasis():
     M = myMolecule("tests/6-QM7/1218.xyz","cc-pvdz")
     Gs = sphericalGrid(M,maxDist=4.5)   
     Vs = Gs.optimizeBasis()
-    printStats(Gs,Vs)
-    distanceVSerror(Gs,Vs,mode=mode,pltLabel="cc-pvdz")
+    Gs.printStats(Vs)
+    Gs.exportErrorVsDistance(Vs,mode=mode,pltLabel="cc-pvdz")
     
     M = myMolecule("tests/6-QM7/1218.xyz","cc-pvtz")
     Gs = sphericalGrid(M,maxDist=4.5)   
     Vs = Gs.optimizeBasis()
-    printStats(Gs,Vs)
-    distanceVSerror(Gs,Vs,mode=mode,pltLabel="cc-pvtz")
+    Gs.printStats(Vs)
+    Gs.exportErrorVsDistance(Vs,mode=mode,pltLabel="cc-pvtz")
 
 
     M = myMolecule("tests/6-QM7/1218.xyz","cc-pvqz")
     Gs = sphericalGrid(M,maxDist=4.5)   
     Vs = Gs.optimizeBasis()
-    printStats(Gs,Vs)
-    distanceVSerror(Gs,Vs,mode=mode,pltLabel="cc-pvqz")
+    Gs.printStats(Vs)
+    Gs.exportErrorVsDistance(Vs,mode=mode,pltLabel="cc-pvqz")
 
     M = myMolecule("tests/6-QM7/1218.xyz","cc-pv5z")
     Gs = sphericalGrid(M,maxDist=4.5)   
     Vs = Gs.optimizeBasis()
-    printStats(Gs,Vs)
-    distanceVSerror(Gs,Vs,mode=mode,pltLabel="cc-pv5z")
+    Gs.printStats(Vs)
+    Gs.exportErrorVsDistance(Vs,mode=mode,pltLabel="cc-pv5z")
 
     
     M = myMolecule("tests/6-QM7/1218.xyz","aug-cc-pv5z")
     Gs = sphericalGrid(M,maxDist=4.5)   
     Vs = Gs.optimizeBasis()
-    printStats(Gs,Vs)
-    distanceVSerror(Gs,Vs,mode=mode,pltLabel="aug-cc-pv5z")
+    Gs.printStats(Vs)
+    Gs.exportErrorVsDistance(Vs,mode=mode,pltLabel="aug-cc-pv5z")
 
     if mode=="com":
         Dists = np.array([np.linalg.norm(Gs.points - Gs.mol.com,axis=1)]).transpose()
@@ -121,14 +105,14 @@ def alrichVSDunning():
     M = myMolecule("tests/6-QM7/1218.xyz","aug-cc-pv5z")
     Gs = sphericalGrid(M,maxDist=4.5)   
     Vs = Gs.optimizeBasis()
-    printStats(Gs,Vs)
-    distanceVSerror(Gs,Vs,mode=mode,pltLabel="aug-cc-pv5z")
+    Gs.printStats(Vs)
+    Gs.exportErrorVsDistance(Vs,mode=mode,pltLabel="aug-cc-pv5z")
 
     M = myMolecule("tests/6-QM7/1218.xyz","def2-QZVPD")
     Gs = sphericalGrid(M,maxDist=4.5)   
     Vs = Gs.optimizeBasis()
-    printStats(Gs,Vs)
-    distanceVSerror(Gs,Vs,mode=mode,pltLabel="def2-QZVPD")
+    Gs.printStats(Vs)
+    Gs.exportErrorVsDistance(Vs,mode=mode,pltLabel="def2-QZVPD")
 
     plt.show()
 
@@ -137,16 +121,16 @@ def testSphericalGrid():
     M = myMolecule("tests/6-QM7/1218.xyz","aug-cc-pv5z")
     Gs = sphericalGrid(M,minDist=0.4,maxDist=4.5)   
     Vs = Gs.optimizeBasis()
-    printStats(Gs,Vs)
-    distanceVSerror(Gs,Vs,mode=mode,pltLabel="aug-cc-pv5z")
+    Gs.printStats(Vs)
+    Gs.exportErrorVsDistance(Vs,mode=mode,pltLabel="aug-cc-pv5z")
 
     # M = myMolecule("tests/6-QM7/1218.xyz","aug-cc-pv5z")
     # Gb = blockGrid(M,maxDist=4.5,minDist=0.4,gridSpacing=0.35)   
     # Vb = Gb.optimizeBasis()
-    # printStats(Gb,Vb)
-    # distanceVSerror(Gb,Vb,mode=mode,pltLabel="aug-cc-pv5z")
+    # Gb.printStats(Vb)
+    # Gb.exportErrorVsDistance(Vb,mode=mode,pltLabel="aug-cc-pv5z")
 
-    # # distanceVSerror(Gb,Vs,mode=mode,pltLabel="S on B")
+    # # Gb.exportErrorVsDistance(Vs,mode=mode,pltLabel="S on B")
 
     # logging.info(f"Vs: {Vs.diagonal()}")
     # logging.info(f"Vb: {Vb.diagonal()}")
