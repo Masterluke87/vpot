@@ -4,7 +4,9 @@ from matplotlib import pyplot as plt
 import numpy as np
 import logging
 from ase.io import read
+import psi4
 import os
+import sys
 
 def flushAllXYZ():
     A = read("QM7/QM7.xyz",index=":")
@@ -26,6 +28,7 @@ def runIndex(index: int):
     np.savez(f"QM7/{index}/input.npz", 
                 Vfit=Vs,
                 Vpot=M.ao_pot, 
+                Nel=M.nElectrons,
                 basis="aug-cc-pv5z",
                 gridInfo=Gs.gridInfo)
     Gs.printStats(Vs)
@@ -40,8 +43,13 @@ def runIndex(index: int):
 
 if __name__ == "__main__":
     logging.basicConfig(filename='QM7.log', level=logging.INFO,filemode="w")
+    psi4.set_memory("16 Gb")
+    psi4.core.set_output_file('output.dat', False)
+    psi4.core.set_num_threads(6)
 
-    runIndex(0)
+    index = int(sys.argv[1])
+
+    runIndex(index)
         
 
         
