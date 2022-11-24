@@ -35,6 +35,7 @@ def runIndex(index: int):
     Gs.exportErrorVsDistance(Vs,mode="min",pltLabel="Error",path=f"QM7/{index}/error.svg",plotPot=True)
 
 
+    psi4.core.set_output_file(f'QM7/{index}/psi.out', False)
     E,wfn = M.runPSI4("HF")
     np.savez(f"QM7/{index}/output.npz", Da=wfn.Da().np, Fa=wfn.Fa().np)
 
@@ -44,7 +45,7 @@ def runIndex(index: int):
 if __name__ == "__main__":
     logging.basicConfig(filename='QM7.log', level=logging.INFO,filemode="w")
     psi4.set_memory("16 Gb")
-    psi4.core.set_output_file('output.dat', False)
+    
     psi4.core.set_num_threads(6)
 
     index = int(sys.argv[1])
