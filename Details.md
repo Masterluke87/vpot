@@ -16,9 +16,9 @@ I = np.load("input.npz",allow_pickle=True)
 ```
 The file contains the following fields (K is the number of basis functions):
 - ``I['Vfit']``: KxK matrix. The K diagonal elements are fitted to represent the external potential:
-$$
+```math
     \sum^{K}_\mu V^{fit}_{\mu\mu} \phi_\mu (r) \approx V(r) = -\sum_A \dfrac{Z_A}{|R_A -r|}
-$$
+```
 The non-diagonal elements $\mu \nu$ are overlap integrals:
 $$
     V^{fit}_{\mu \nu} = S_{\mu \nu} = \langle \phi_\mu \mid \phi_\nu \rangle
