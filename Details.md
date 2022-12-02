@@ -20,13 +20,13 @@ The file contains the following fields (K is the number of basis functions):
     \sum^{K}_\mu V^{fit}_{\mu\mu} \phi_\mu (r) \approx V(r) = -\sum_A \dfrac{Z_A}{|R_A -r|}
 ```
 The non-diagonal elements $\mu \nu$ are overlap integrals:
-$$
+```math
     V^{fit}_{\mu \nu} = S_{\mu \nu} = \langle \phi_\mu \mid \phi_\nu \rangle
-$$
+```
 - ``I['Vpot']``: KxK matrix, representing the ao_potential matrix (might also be useful):
-$$
+```math
  V_{\mu \nu}^{pot} = \langle \phi_\mu \mid -\sum_A \dfrac{Z_A}{|R_A -r|} \mid\phi_\nu \rangle
-$$
+``` 
 - ``I['Nel'].item()`` contains the number of electrons
 - ``I['basis'].item()`` string containing the basis set
 - ``I['gridInfo'].item()`` dict with some information about the grid used in the fitting scheme.
@@ -40,7 +40,7 @@ O = np.load("output.npz",allow_pickle=True)
 ```
 The file contains the following fields:
 - ``I['Fa']``: KxK converged Fock-matrix:
-$$
+```math
 F_{\mu \nu } = \langle \phi_\mu \mid \hat{f} \mid\phi_\nu \rangle
- $$
+```
 - ``I['Da']``: KxK Density-matrix.
