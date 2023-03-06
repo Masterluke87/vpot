@@ -1,6 +1,6 @@
 # File description
 
-- The archive qm7.tar.gz contains 7211 folders (from 0 to 7120). 
+- The archive qm7.tar.gz contains 7211 folders (from 0 to 7210). 
 - Each folder contains 5 files:
     1. ``*.xyz``: file representing the structure
     2. ``error.svg``: containing some statistics of the fitting procedure 
