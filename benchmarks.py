@@ -1,8 +1,16 @@
 from vpot.calc import myMolecule, sphericalGrid, blockGrid
-from vpot.calc.potential import vpot,vBpot
+from vpot.calc.potential import vpot,vBpot, vpotANC
 from matplotlib import pyplot as plt
 import numpy as np
 import logging
+
+def testANCMolecule(prec):
+    M = myMolecule("tests/6-QM7/1218.xyz","def2-TZVPD-decon")
+    Gs = sphericalGrid(M,minDist=0.01)   
+    Vs = Gs.optimizeBasis(potentialType="anc",a=prec)
+    Gs.printStats(Vs)
+    Gs.exportErrorVsDistance(Vs,pltLabel="def2-SVP",plotPot=True)
+    
 
 
 
@@ -139,6 +147,164 @@ def testSphericalGrid():
     plt.show()
 
 
+def testPotentialIntegration():
+    M = myMolecule("tests/6-QM7/1.xyz","def2-TZVP-c")
+    Gs = sphericalGrid(M,minDist=0.05,maxDist=20.0,nRadial=200)   
+    Vs = Gs.optimizeBasis()
+    Gs.printStats(Vs)
+
+    vpotError = 0.0 
+    VPOT  = np.zeros(Gs.mol.ao_pot.shape[0])
+    VBPOT = np.zeros(Gs.mol.ao_pot.shape[0])
+
+    for i in range(Gs.mol.ao_pot.shape[0]):
+        VP = np.sum(Gs.phi[:,i] * vpot(Gs.mol.geom,Gs.mol.elez,Gs.points) * Gs.phi[:,i]*Gs.weights)
+        VB = np.sum(Gs.phi[:,i] * vBpot(Gs.phi, Vs.diagonal())            * Gs.phi[:,i] * Gs.weights)
+        
+        logging.info(f"[{i}] {Gs.mol.ao_pot[i][i]:4.2f} {VP:4.2f} {VB:4.2f}")
+        VPOT[i] = VP
+        VBPOT[i] = VB
+            
+    
+    logging.info(f"ao_pot - VPOT: {np.sum(np.abs(Gs.mol.ao_pot.diagonal() - VPOT))}")
+    logging.info(f"ao_pot - VBPOT: {np.sum(np.abs(Gs.mol.ao_pot.diagonal() - VBPOT))}")
+    logging.info(f"VPOT - VBPOT: {np.sum(np.abs(VPOT - VBPOT))}")
+    M.runPSI4("HF")
+    
+def plotPotentialOfAtom():
+    M = myMolecule("tests/1-Oxygen/o.xyz","def2-TZVP")
+    gridSpace = 0.01
+    myCube = {"xmin" : 0.0,
+            "xmax" : gridSpace,
+            "ymin" : 0.0,
+            "ymax" : gridSpace,
+            "zmin" : -10.0,
+            "zmax" : 10.0
+           }
+    Gb = blockGrid(M,cube=myCube,gridSpacing=gridSpace,minDist=0.01,maxDist=10.0)
+
+    Gs = sphericalGrid(M,minDist=0.1,nRadial=200)
+
+    Vs = Gs.optimizeBasis()
+    Gs.printStats(Vs)
+
+    logging.info(f"{Gb.points}")
+    VPOT = vpot(Gb.mol.geom, Gb.mol.elez, Gb.points)
+
+    N = np.sum(VPOT*gridSpace)
+
+    VBPOT = vBpot(Gb.phi,Vs.diagonal())
+
+    x = Gb.points[:,2]
+    y = - 8/(np.abs(Gb.points[:,2]))
+
+    plt.plot(Gb.points[:,2],VPOT)
+    plt.plot(x,y,"--",lw=3)
+    
+    
+    #plt.plot(Gb.points[:,2],Gb.phi[:,0])
+    plt.plot(Gb.points[:,2],VBPOT)
+    plt.vlines([-0.5,0.5],-5,5)
+    Gs.mol.basisSet.print_detail_out()
+    logging.info(np.sum(Gs.phi[:,0]*Gs.phi[:,0]*Gs.weights))
+    logging.info(f"{Vs.diagonal()}")
+
+
+    
+    
+
+    
+    plt.show()
+    
+def plotPotentialOfAtomANC():
+
+    def testBlockGridANC(ancPrecision):
+        M = myMolecule("tests/1-Oxygen/o.xyz","def2-tzvpd-decon")
+        gridSpace = 0.01
+        myCube = {"xmin" : 0.0,
+                "xmax" : gridSpace,
+                "ymin" : 0.0,
+                "ymax" : gridSpace,
+                "zmin" : -10.0,
+                "zmax" : 10.0
+                }    
+
+        prec = ancPrecision 
+        Gb = blockGrid(M,cube=myCube,gridSpacing=gridSpace,minDist=0.01,maxDist=10.0)
+        Vb = Gb.optimizeBasis(potentialType="anc",a=prec)
+
+        Gb.printStats(Vb)
+
+
+        VPOT = vpot(Gb.mol.geom, Gb.mol.elez, Gb.points)
+        VPOTANC = vpotANC(Gb.mol.geom, Gb.mol.elez, Gb.points,a=prec)
+
+        N = np.sum(VPOT*gridSpace)
+
+        VBPOT = vBpot(Gb.phi,Vb.diagonal())
+
+        x = Gb.points[:,2]
+        y = - 8/(np.abs(Gb.points[:,2]))
+
+        plt.plot(Gb.points[:,2],VPOT,label="vpot")
+        plt.plot(Gb.points[:,2],VPOTANC,label="vpot-anc")
+        plt.plot(Gb.points[:,2],VBPOT,label="VBPOT")
+        plt.legend()
+        plt.vlines([-0.5,0.5],-5,5)
+        plt.xlim((-1.0,1.0))
+        Gb.mol.basisSet.print_detail_out()
+    
+        plt.show()
+
+    def testSphericalGridANC(ancPrecision):
+        M = myMolecule("tests/1-Oxygen/o.xyz","def2-tzvpd-decon")
+        gridSpace = 0.01
+        myCube = {"xmin" : 0.0,
+                "xmax" : gridSpace,
+                "ymin" : 0.0,
+                "ymax" : gridSpace,
+                "zmin" : -10.0,
+                "zmax" : 10.0
+                }    
+        Gb = blockGrid(M,cube=myCube,gridSpacing=gridSpace,minDist=0.01,maxDist=10.0)
+
+
+        prec = ancPrecision 
+        Gs = sphericalGrid(M,minDist=0.01,maxDist=10.0)
+        Vs = Gs.optimizeBasis(potentialType="anc",a=prec)
+
+        Gs.printStats(Vs)
+
+
+        VPOT = vpot(Gb.mol.geom, Gb.mol.elez, Gb.points)
+        VPOTANC = vpotANC(Gb.mol.geom, Gb.mol.elez, Gb.points,a=prec)
+
+
+        VBPOT = vBpot(Gb.phi,Vs.diagonal())
+
+        plt.plot(Gb.points[:,2],VPOT,label="vpot")
+        plt.plot(Gb.points[:,2],VPOTANC,label="vpot-anc")
+        plt.plot(Gb.points[:,2],VBPOT,label="VBPOT")
+        plt.legend()
+        plt.vlines([-0.5,0.5],-5,5)
+        plt.xlim((-1.0,1.0))
+        Gb.mol.basisSet.print_detail_out()
+
+        plt.show()
+        Gs.exportErrorVsDistance(Vs,plotPot=True)
+    
+
+
+    
+    """
+    testBlockGridANC(1)
+    testBlockGridANC(2)
+    testBlockGridANC(4)
+    """
+    testSphericalGridANC(1)
+    testSphericalGridANC(2)
+    testSphericalGridANC(4)
+
 
 if __name__ == "__main__":
 
@@ -158,9 +324,15 @@ if __name__ == "__main__":
     # testAlrichsBasis()
     # testDunningBasis()
     # testSphericalGrid()
-    alrichVSDunning()
+    # alrichVSDunning()
 
 
+
+    #testPotentialIntegration()
+
+    #plotPotentialOfAtomANC()
+    testANCMolecule(1)
+    testANCMolecule(2)
 
 
     # Gb = blockGrid(M,maxDist=3.5)  

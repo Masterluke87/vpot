@@ -4,7 +4,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 import time
 from .mol import myMolecule
-from .potential import vpot,vBpot
+from .potential import vpot,vBpot,vpotANC
 
 
 def genCube(mol, centeredAroundOrigin=False, thresh=5.0):
@@ -70,11 +70,29 @@ class myGrid(object):
         #Shape (N,K)
         self.phi    = None
 
-    def optimizeBasis(self):
+        #We save also the potential we would like to fit
+        #Until now this is either the true potential or the 
+        #analytic norm conserving potential
+
+        self.vpot  = None
+
+    def optimizeBasis(self,potentialType:str = "exact",a:int = 2):
         start = time.perf_counter()
-        VMat, resis,_,_ = np.linalg.lstsq(self.phi, -vpot(self.mol.geom,
+        
+        if (potentialType == "exact"):
+            VMat, resis,_,_ = np.linalg.lstsq(self.phi, -vpot(self.mol.geom,
                                                       self.mol.elez,
                                                       self.points),rcond=-1)
+            self.vpot = -vpot(self.mol.geom, self.mol.elez,self.points)
+
+        elif (potentialType == "anc"):
+            VMat, resis,_,_ = np.linalg.lstsq(self.phi, -vpotANC(self.mol.geom,
+                                                       self.mol.elez,
+                                                       self.points , a),rcond=-1)
+            self.vpot = vpotANC(self.mol.geom, self.mol.elez, self.points , a)
+
+        else:
+            raise(f"Unknown potential {potentialType}")
 
         mints = psi4.core.MintsHelper(self.mol.basisSet)
         X =mints.ao_overlap().np
@@ -87,7 +105,7 @@ class myGrid(object):
 
     def exportErrorVsDistance(self,V,mode :str ="min", pltLabel: str= "", path : str ="",plotPot:bool=False):
         
-        Error = vBpot(self.phi,V.diagonal()) - vpot(self.mol.geom,self.mol.elez,self.points)
+        Error = vBpot(self.phi,V.diagonal()) - self.vpot
         if mode=="com":
             Dists = np.array([np.linalg.norm(self.points - self.mol.com,axis=1)]).transpose()
         if mode=="min":
@@ -98,12 +116,15 @@ class myGrid(object):
       
         if plotPot:
             ax2 = plt.gca().twinx()
-            ax2.plot(Dists,vpot(self.mol.geom,self.mol.elez,self.points),"o",color="red",markersize=0.6,label="Potential")           
+            ax2.plot(Dists,self.vpot,"o",color="red",markersize=0.6,label="Potential")           
             ax2.set_ylabel("Potential [a.u.]")
-        
+            plt.legend()
+            
         if path:
             plt.savefig(f"{path}")
             plt.clf()
+        else:
+            plt.show()
         
         
 
@@ -111,10 +132,10 @@ class myGrid(object):
 
     def printStats(self, V):
         logging.info(f"GridInfo : {self.gridInfo} ")
-        logging.info(f"residue  : {np.sum(np.square((vBpot(self.phi,V.diagonal()) - vpot(self.mol.geom ,self.mol.elez,self.points))))}")
-        logging.info(f"MeanError: {np.mean(np.square((vBpot(self.phi,V.diagonal()) - vpot(self.mol.geom,self.mol.elez,self.points))))}")
-        logging.info(f"MaxError : {np.max(np.square((vBpot(self.phi,V.diagonal()) - vpot(self.mol.geom ,self.mol.elez,self.points))))}")
-        logging.info(f"MinError : {np.min(np.square((vBpot(self.phi,V.diagonal()) - vpot(self.mol.geom ,self.mol.elez,self.points))))}")
+        logging.info(f"residue  : {np.sum(np.square((vBpot(self.phi,V.diagonal())  - self.vpot )))}")
+        logging.info(f"MeanError: {np.mean(np.square((vBpot(self.phi,V.diagonal()) - self.vpot )))}")
+        logging.info(f"MaxError : {np.max(np.square((vBpot(self.phi,V.diagonal())  - self.vpot )))}")
+        logging.info(f"MinError : {np.min(np.square((vBpot(self.phi,V.diagonal())  - self.vpot )))}")
 
 
 
@@ -144,7 +165,7 @@ class sphericalGrid(myGrid):
         start = time.perf_counter()
         mol = self.mol
 
-        delta = 0.01
+        delta = 0.0
         psi4.set_options({"DFT_SPHERICAL_POINTS"   : nSphere,
                             "DFT_RADIAL_POINTS"    : nRadial,
                             "DFT_RADIAL_SCHEME"    : radialScheme,
@@ -212,6 +233,7 @@ class sphericalGrid(myGrid):
 
         logging.info(f'basis fcns that are all zeros: {all_zeros}')
         self.points = Pts[:,:3]
+        self.weights = Pts[:,3]
         self.phi = vals
         self.gridInfo["type"] = "spherical"
         self.gridInfo["minDist"] = minDist
@@ -232,11 +254,15 @@ class blockGrid(myGrid):
                  gridSpacing: float=0.2,
                  minDist: float=0.25,
                  maxDist: float=7.5,
-                 centeredAroundOrigin=False
+                 centeredAroundOrigin=False,
+                 cube=None
                  ):
         myGrid.__init__(self,mol)
 
-        self.cube = genCube(self.mol,centeredAroundOrigin=False,thresh=maxDist)
+        if not cube:
+            self.cube = genCube(self.mol,centeredAroundOrigin=False,thresh=maxDist)
+        else:
+            self.cube = cube
         self._genBlockGrid(self.cube,gridSpacing,minDist,maxDist)
 
     def _genBlockGrid(self, 
@@ -317,6 +343,8 @@ class blockGrid(myGrid):
 if __name__ == "__main__":
     
     logging.basicConfig(filename='grids.log', level=logging.DEBUG,filemode="w")
+    
+    """
     M = myMolecule("tests/6-QM7/1.xyz","def2-TZVP")
     G = sphericalGrid(M,maxDist=5.0,nSphere=2702)
     logging.info(f"{G.gridInfo}")
@@ -331,3 +359,9 @@ if __name__ == "__main__":
     G3 = blockGrid(M,minDist=0.2,gridSpacing=0.15,centeredAroundOrigin=True)
     V3 = G3.optimizeBasis()
     logging.info(V3)
+    """
+    M = myMolecule("tests/6-QM7/1.xyz","def2-TZVP")
+    G = sphericalGrid(M)
+    E,wfn = G.mol.runPSI4("HF")
+    Da = wfn.Da().np
+    
