@@ -29,7 +29,7 @@ class myMolecule(object):
         self.ao_pot = mints.ao_potential().np
 
 
-
+        self.psi4Mol  = mol 
         self.basisSet = wfn.basisset()
 
 

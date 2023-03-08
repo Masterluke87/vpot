@@ -1,8 +1,10 @@
 from vpot.calc import myMolecule, sphericalGrid, blockGrid
 from vpot.calc.potential import vpot,vBpot, vpotANC
+from vpot.calc import DFTGroundState
 from matplotlib import pyplot as plt
+import psi4
 import numpy as np
-import logging
+import logging,time
 
 def testANCMolecule(prec):
     M = myMolecule("tests/6-QM7/1218.xyz","def2-TZVPD-decon")
@@ -208,12 +210,6 @@ def plotPotentialOfAtom():
     Gs.mol.basisSet.print_detail_out()
     logging.info(np.sum(Gs.phi[:,0]*Gs.phi[:,0]*Gs.weights))
     logging.info(f"{Vs.diagonal()}")
-
-
-    
-    
-
-    
     plt.show()
     
 def plotPotentialOfAtomANC():
@@ -305,6 +301,131 @@ def plotPotentialOfAtomANC():
     testSphericalGridANC(2)
     testSphericalGridANC(4)
 
+def testIntegration():
+
+    nSphere = 302
+    nRadial = 120
+
+    """
+    for maxDist in [5.0,10.0,20.0]:
+        for nSphere in [590]: #,770,974,1202,1454,1730,2030]:
+            for nRadial in [300]:
+                M = myMolecule("tests/6-QM7/1.xyz","def2-TZVP")
+                Gs = sphericalGrid(M,minDist=0.0,maxDist=maxDist,nRadial=nRadial,nSphere=nSphere,pruningScheme="None")   
+                Vs = Gs.optimizeBasis()
+                Gs.printStats(Vs)
+            
+                vpotAnalytic = M.ao_pot
+                vpotNumeric  = np.einsum("ji,j,jk,j->ik",Gs.phi,vpot(Gs.mol.geom,Gs.mol.elez,Gs.points),Gs.phi,Gs.weights)
+
+                logging.info(f"MaxDist: {maxDist} Ns: {nSphere} nR: {nRadial} Error: {np.linalg.norm(vpotAnalytic-vpotNumeric)} Max: {np.max(np.abs(vpotAnalytic-vpotNumeric))}")
+
+    """
+
+    gridSpacing = 0.5
+    for gridSpacing in [0.2,0.1,0.075]:
+        M = myMolecule("tests/6-QM7/1.xyz","def2-TZVP")
+        Gb = blockGrid(M,gridSpacing,0.01,4.5)
+        vpotAnalytic = M.ao_pot
+        vpotNumeric  = np.einsum("ji,j,jk->ik",Gb.phi,vpot(Gb.mol.geom,Gb.mol.elez,Gb.points),Gb.phi)*gridSpacing**3
+        logging.info(f"GridSpacing: {gridSpacing} Error: {np.linalg.norm(vpotAnalytic-vpotNumeric)} Max: {np.max(np.abs(vpotAnalytic-vpotNumeric))}")
+
+    return vpotAnalytic,vpotNumeric
+
+
+def testMyDFT():
+    """
+    Run that and --> grep "Functional" benchmark.log
+    """
+    psi4.set_memory("12Gb")
+    psi4.set_num_threads(8)
+    
+
+    M = myMolecule("tests/6-QM7/1.xyz","def2-TZVP")
+    for func in ["HF","PBE","B3LYP","TPSS"]:
+        MyDFT,_ = DFTGroundState(M,func)
+        EPsi,_ = M.runPSI4(func)
+        logging.info(f"Functional: {func} Psi4: {EPsi:16.12f}, MyDFT: {MyDFT:16.12f} Diff: {EPsi-MyDFT:16.12f}")
+
+    M = myMolecule("tests/6-QM7/1218.xyz","def2-TZVP")
+    for func in ["HF","PBE","B3LYP","TPSS"]:
+        MyDFT,_ = DFTGroundState(M,func)
+        EPsi,_ = M.runPSI4(func)
+        logging.info(f"Functional: {func} Psi4: {EPsi:16.12f}, MyDFT: {MyDFT:16.12f} Diff: {EPsi-MyDFT:16.12f}")
+
+
+def testPotentialDFT():
+    """
+    1. Push a numerically evaluated AO POT into the DFT algo
+    2. Add noise to AO-POT -> works
+    """
+    summary = open("testPotentialDFT.txt","w")
+    summary.write("{:10s} {:16s} {:16s} {:10s} {:10s} {:10s}\n".format("Noise","PSI4","MyDFT(NumPot)","DIFF","potError","maxPotErr"))
+
+    psi4.set_memory("12Gb")
+    psi4.set_num_threads(8)
+    
+
+    for noise in [0.0,1.0E-6,1.0E-4,1.0E-3,1.0E-1]:
+        M = myMolecule("tests/6-QM7/1.xyz","def2-TZVP")
+        Gs = sphericalGrid(M,minDist=0.0,maxDist=10.0,nRadial=300,nSphere=590,pruningScheme="None")
+        VPOT = np.einsum("ji,j,jk,j->ik",Gs.phi,vpot(Gs.mol.geom,Gs.mol.elez,Gs.points),Gs.phi,Gs.weights)
+
+        N     = np.random.normal(0.0,noise,(M.basisSet.nbf(),M.basisSet.nbf()))
+        VPOT += (np.tril(N) + np.triu(N.T, 1))
+
+        MyDFT,_ = DFTGroundState(M,"PBE",AOPOT=VPOT)
+        EPsi,_ = M.runPSI4("PBE")
+
+        summary.write(f"{noise:.3E} {EPsi:16.12f} {MyDFT:16.12f} {EPsi-MyDFT:.3e} {np.linalg.norm(M.ao_pot-VPOT):.3e} {np.max(np.abs(M.ao_pot-VPOT)):.3e}\n")
+        
+
+def testANCvsExactPotential():
+    summary = open("testANCvsExactPotential.txt","w")
+    summary.write("{:^16s} {:^10s} {:^16s} {:^16s} {:^16s} {:^10s} {:^10s}\n".format("Basis","a","E_ANC_exact","E_ANC_basis","E_exact","potError","maxPotErr"))
+
+    basisSet = "def2-SVP-decon"
+
+    for prec in [1,2,3,4,5,6]:
+        for basisSet in ["def2-SVP","def2-TZVP","def2-QZVP","def2-SVP-decon","def2-TZVP-decon","def2-QZVP-decon"]:
+            M = myMolecule("tests/6-QM7/1.xyz", basisSet)
+            Gs = sphericalGrid(M,minDist=0.0,maxDist=10.0,nRadial=300,nSphere=590,pruningScheme="None")
+            VMat = Gs.optimizeBasis(potentialType="anc",a=prec)
+            Gs.printStats(VMat)
+            
+
+            VANCexact = np.einsum("ji,j,jk,j->ik",Gs.phi,vpotANC(Gs.mol.geom,Gs.mol.elez,Gs.points,prec),Gs.phi,Gs.weights)
+            VANCbasis = np.einsum("ji,j,jk,j->ik",Gs.phi,vBpot(Gs.phi,VMat.diagonal()),Gs.phi,Gs.weights)
+
+            MyDFTexact,_ = DFTGroundState(M,"PBE",AOPOT=VANCexact)
+            MyDFTbasis,_ = DFTGroundState(M,"PBE",AOPOT=VANCbasis)
+            EPsi,_ = M.runPSI4("PBE")
+
+            summary.write(f"{basisSet:^16s} {prec:^10d} {MyDFTexact:^16.6f} {MyDFTbasis:^16.6f} {EPsi:^16.6f}\n")
+            summary.flush()
+
+    """  
+    summary = open("testANCvsExactPotential.txt","w")
+    summary.write("{:10s} {:16s} {:16s} {:10s} {:10s} {:10s}\n".format("a","PSI4","MyDFT(NumPot)","DIFF","potError","maxPotErr"))
+
+
+    for prec in [2,4,6,8,10,12]:
+        M = myMolecule("tests/6-QM7/1.xyz","def2-TZVP")
+        Gs = sphericalGrid(M,minDist=0.0,maxDist=10.0,nRadial=300,nSphere=590,pruningScheme="None")
+
+        VANCexact = np.einsum("ji,j,jk,j->ik",Gs.phi,vpotANC(Gs.mol.geom,Gs.mol.elez,Gs.points,prec),Gs.phi,Gs.weights)
+        MyDFT,_ = DFTGroundState(M,"PBE",AOPOT=VANC)
+
+
+
+        EPsi,_ = M.runPSI4("PBE")
+
+        summary.write(f"{prec:10d} {EPsi:16.12f} {MyDFT:16.12f} {EPsi-MyDFT:.3e} {np.linalg.norm(M.ao_pot-VANCexact):.3e} {np.max(np.abs(M.ao_pot-VANCexact)):.3e}\n")
+    """
+
+
+
+
 
 if __name__ == "__main__":
 
@@ -326,15 +447,17 @@ if __name__ == "__main__":
     # testSphericalGrid()
     # alrichVSDunning()
 
-
+    #testIntegration()
 
     #testPotentialIntegration()
 
     #plotPotentialOfAtomANC()
-    testANCMolecule(1)
-    testANCMolecule(2)
+    #testANCMolecule(1)
+    #testANCMolecule(2)
+    testANCvsExactPotential()
 
-
+    #testMyDFT()
+    #testPotentialDFT()
     # Gb = blockGrid(M,maxDist=3.5)  
     # Vb = Gb.optimizeBasis()
     # printStats(Gb,Vb)
