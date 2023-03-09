@@ -130,12 +130,21 @@ class myGrid(object):
 
 
 
-    def printStats(self, V):
-        logging.info(f"GridInfo : {self.gridInfo} ")
-        logging.info(f"residue  : {np.sum(np.square((vBpot(self.phi,V.diagonal())  - self.vpot )))}")
-        logging.info(f"MeanError: {np.mean(np.square((vBpot(self.phi,V.diagonal()) - self.vpot )))}")
-        logging.info(f"MaxError : {np.max(np.square((vBpot(self.phi,V.diagonal())  - self.vpot )))}")
-        logging.info(f"MinError : {np.min(np.square((vBpot(self.phi,V.diagonal())  - self.vpot )))}")
+    def printStats(self, V, output="logger"):
+        if output=="logger":
+            logging.info(f"GridInfo : {self.gridInfo} ")
+            logging.info(f"residue  : {np.sum(np.square((vBpot(self.phi,V.diagonal())  - self.vpot )))}")
+            logging.info(f"MeanError: {np.mean(np.square((vBpot(self.phi,V.diagonal()) - self.vpot )))}")
+            logging.info(f"MaxError : {np.max(np.square((vBpot(self.phi,V.diagonal())  - self.vpot )))}")
+            logging.info(f"MinError : {np.min(np.square((vBpot(self.phi,V.diagonal())  - self.vpot )))}")
+        elif output=="print":
+            print(f"GridInfo : {self.gridInfo} ")
+            print(f"residue  : {np.sum(np.square((vBpot(self.phi,V.diagonal())  - self.vpot )))}")
+            print(f"MeanError: {np.mean(np.square((vBpot(self.phi,V.diagonal()) - self.vpot )))}")
+            print(f"MaxError : {np.max(np.square((vBpot(self.phi,V.diagonal())  - self.vpot )))}")
+            print(f"MinError : {np.min(np.square((vBpot(self.phi,V.diagonal())  - self.vpot )))}")
+        else:
+            pass
 
 
 

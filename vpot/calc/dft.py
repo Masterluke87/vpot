@@ -25,12 +25,19 @@ def DFTGroundState(mol,func,**kwargs):
         "D_CONV"    : 1E-6,
         "MAXITER"   : 150,
         "BASIS"     : mol.basisString,
-        "GAMMA"     : 0.80,
+        "GAMMA"     : 0.95,
         "DIIS_LEN"  : 6,
         "DIIS_MODE" : "ADIIS+CDIIS",
         "DIIS_EPS"  : 0.1,
         "MIXMODE"   : "DAMP",
         "RESTART"   : False}
+    
+    for i in options.keys():
+        if i in kwargs:
+            options[i] = kwargs[i]
+    printHeader("Options Run:",2)
+    for key,value in options.items():
+        print(f"{key:20s} {str(value):20s}")
 
     printHeader("Basis Set:",2)
     wfn   = psi4.core.Wavefunction.build(mol.psi4Mol,options["BASIS"])
