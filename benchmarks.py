@@ -383,7 +383,7 @@ def testPotentialDFT():
 def testANCvsExactPotential():
     psi4.set_memory("24Gb")
     psi4.set_num_threads(8)
-    summary = open("testANCvsExactPotential.txt","w")
+    summary = open("tests/testANCvsExactPotential.txt","w")
     summary.write("{:^16s} {:^10s} {:^16s} {:^16s} {:^16s} {:^16s} {:^16s} {:^16s} {:^16s} {:^16s} {:^16s}\n".format("Basis","a","E_ANC_exact",
     "E_ANC_basis","E_exact","basErr","basMax","ancErr","ancMax","potErr","potMax"))
 
