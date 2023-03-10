@@ -381,8 +381,11 @@ def testPotentialDFT():
         
 
 def testANCvsExactPotential():
+    psi4.set_memory("24Gb")
+    psi4.set_num_threads(8)
     summary = open("testANCvsExactPotential.txt","w")
-    summary.write("{:^16s} {:^10s} {:^16s} {:^16s} {:^16s} {:^10s} {:^10s}\n".format("Basis","a","E_ANC_exact","E_ANC_basis","E_exact","potError","maxPotErr"))
+    summary.write("{:^16s} {:^10s} {:^16s} {:^16s} {:^16s} {:^16s} {:^16s} {:^16s} {:^16s} {:^16s} {:^16s}\n".format("Basis","a","E_ANC_exact",
+    "E_ANC_basis","E_exact","basErr","basMax","ancErr","ancMax","potErr","potMax"))
 
     basisSet = "def2-SVP-decon"
 
@@ -401,7 +404,15 @@ def testANCvsExactPotential():
             MyDFTbasis,_ = DFTGroundState(M,"PBE",AOPOT=VANCbasis)
             EPsi,_ = M.runPSI4("PBE")
 
-            summary.write(f"{basisSet:^16s} {prec:^10d} {MyDFTexact:^16.6f} {MyDFTbasis:^16.6f} {EPsi:^16.6f}\n")
+            basErr = np.linalg.norm(VANCexact-VANCbasis)
+            basMax = np.max(np.abs(VANCexact-VANCbasis))
+            ancErr = np.linalg.norm(VANCexact-M.ao_pot)
+            ancMax = np.max(np.abs(VANCexact-M.ao_pot))
+            potErr = np.linalg.norm(VANCbasis-M.ao_pot)
+            potMax = np.max(np.abs(VANCbasis-M.ao_pot))
+            
+
+            summary.write(f"{basisSet:^16s} {prec:^10d} {MyDFTexact:^16.6f} {MyDFTbasis:^16.6f} {EPsi:^16.6f} {basErr:^16.6f} {basMax:^16.6f} {ancErr:^16.6f} {ancMax:^16.6f} {potErr:^16.6f} {potMax:^16.6f}\n")
             summary.flush()
 
     """  
