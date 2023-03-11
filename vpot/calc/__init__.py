@@ -1,8 +1,9 @@
-from .grids import blockGrid, sphericalGrid
+from .grids import blockGrid, sphericalGrid, pointGrid
 from .mol import myMolecule
 from .dft import DFTGroundState
 
 __all__= ["myMolecule",
           "sphericalGrid",
-          "blockGrid"
+          "blockGrid",
+          "pointGrid",
           "DFTGroundState"]
