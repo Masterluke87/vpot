@@ -5,6 +5,14 @@ from matplotlib import pyplot as plt
 import time
 from .mol import myMolecule
 from .potential import vpot,vBpot,vpotANC
+from ase.data.colors import jmol_colors
+from ase.data import chemical_symbols
+
+
+
+colors = {"H" : "grey",
+          "C" : "steelblue",
+          "N" : ""}
 
 
 def genCube(mol, centeredAroundOrigin=False, thresh=5.0):
@@ -76,6 +84,9 @@ class myGrid(object):
 
         self.vpot  = None
 
+    def getMSError(self,V):
+        return np.mean(np.square((vBpot(self.phi,V.diagonal()) - self.vpot )))
+        
     def optimizeBasis(self,potentialType:str = "exact",a:int = 2):
         start = time.perf_counter()
         
@@ -108,9 +119,16 @@ class myGrid(object):
         Error = vBpot(self.phi,V.diagonal()) - self.vpot
         if mode=="com":
             Dists = np.array([np.linalg.norm(self.points - self.mol.com,axis=1)]).transpose()
+            plt.plot(Dists,Error,"o",markersize=0.6,label=pltLabel)
         if mode=="min":
             Dists = np.min(np.array([np.linalg.norm(self.points - x,axis=1) for x in self.mol.geom]).transpose(),axis=1)
-        plt.plot(Dists,Error,"o",markersize=0.6,label=pltLabel)
+            DminARG = np.argmin(np.array([np.linalg.norm(self.points - x,axis=1) for x in self.mol.geom]).transpose(),axis=1)
+            DminZ = np.array([int(self.mol.elez[x]) for x in DminARG])
+            for i in set(DminZ):
+                idx = np.where(DminZ==i)
+                plt.plot(Dists[idx],Error[idx],"o",color=jmol_colors[i],markersize=0.6,label=chemical_symbols[i])
+            plt.legend()
+        
         plt.ylabel("Error wrt. exact potential [a.u.]")
         plt.xlabel("Distance to neareast nuclei [a.u.]")
       
@@ -203,13 +221,15 @@ class sphericalGrid(myGrid):
         Pts = np.array(tmpPts)
         logging.info(f"genSphereTime T2: {time.perf_counter()-start:10.2f} s")
         """
+        
+        
 
         P       = np.array(Vpot.get_np_xyzw()).transpose()
         Dist    = np.array([np.linalg.norm(P[:,:3] - x,axis=1) for x in mol.geom]).transpose()
         Dmin    = np.min(Dist,axis=1)
         Pts     = P[np.where((Dmin>minDist) & (Dmin < maxDist))]
 
-
+        print(f"Filter: {Pts.shape}")
         logging.info(f"genSphereTime T2: {time.perf_counter()-start:10.2f} s")
 
 
@@ -297,7 +317,100 @@ class sphericalGrid(myGrid):
         logging.info(f"optimizeBasis time: {time.perf_counter()-start:10.2f} s")
         return X
 
+class sphericalAtomicGrid(myGrid):
+    def __init__(self,
+                 mol: myMolecule,
+                 atomType : str="C",
+                 minDist: float=0.25,
+                 maxDist: float=7.5,
+                 nRadial: int=75, 
+                 nSphere: int=302,
+                 radialScheme: str  = "BECKE",
+                 pruningScheme: str = "TREUTLER"):
+        myGrid.__init__(self,mol)
+        self._genSphericalGrid(atomType,minDist,maxDist,nRadial,nSphere,radialScheme,pruningScheme)
+        
+    def _genSphericalGrid(self,atomType,minDist,maxDist,nRadial,nSphere,radialScheme,pruningScheme):
+        print(f"Creating a spherical grid for atomtype {atomType}")
+        start = time.perf_counter()
+        mol = self.mol
 
+        delta = 0.0
+        psi4.set_options({"DFT_SPHERICAL_POINTS"   : nSphere,
+                            "DFT_RADIAL_POINTS"    : nRadial,
+                            "DFT_RADIAL_SCHEME"    : radialScheme,
+                            "DFT_PRUNING_SCHEME"   : pruningScheme,
+                            "DFT_REMOVE_DISTANT_POINTS" : True})  
+
+        basis_extents = psi4.core.BasisExtents(mol.basisSet, delta)
+        functional = psi4.driver.dft.build_superfunctional("svwn", True)[0]
+        Vpot       = psi4.core.VBase.build(mol.basisSet, functional, "RV")
+        Vpot.initialize()
+        
+        atomLabels = [chemical_symbols[int(x)].upper() for x in mol.elez]
+        #print(f"atomLabels: {atomLabels}")
+        
+        
+        idx = [c for c,x in enumerate(atomLabels) if x==atomType]
+        
+        
+        
+        P       = np.array(Vpot.get_np_xyzw()).transpose()
+        #print(f"Total {P.shape}")
+        Dist    = np.array([np.linalg.norm(P[:,:3] - x,axis=1) for x in mol.geom]).transpose()
+        filterDist = Dist[:,idx]
+        Dmin    = np.min(filterDist,axis=1)
+        Pts     = P[np.where((Dmin>minDist) & (Dmin < maxDist))]
+
+        #print(f"Filter {Pts.shape}")
+
+        logging.info(f"genSphereTime T2: {time.perf_counter()-start:10.2f} s")
+
+
+        for c,i in enumerate(mol.geom):
+            logging.info(f"radii  : {sorted(list(set(np.round(np.linalg.norm(Pts[:,:3]-i,axis=1),decimals=2))))}); {len(set(np.round(np.linalg.norm(Pts[:,:3]-i,axis=1),decimals=2)))}")
+
+        logging.info(f"genSphereTime T3: {time.perf_counter()-start:10.2f} s")
+
+        xs = psi4.core.Vector.from_array(Pts[:,0])
+        ys = psi4.core.Vector.from_array(Pts[:,1])
+        zs = psi4.core.Vector.from_array(Pts[:,2])
+        ws = psi4.core.Vector.from_array(Pts[:,3])
+
+        blockopoints = psi4.core.BlockOPoints(xs, ys, zs, ws, basis_extents)
+        max_points = blockopoints.npoints()
+        max_functions = mol.basisSet.nbf()
+        funcs = psi4.core.BasisFunctions(mol.basisSet, max_points, max_functions)
+        lpos = np.array(blockopoints.functions_local_to_global())
+        npoints = blockopoints.npoints()
+
+        funcs.compute_functions(blockopoints)
+        phi = np.array(funcs.basis_values()["PHI"])[:npoints, :lpos.shape[0]]
+
+        vals = np.array(funcs.basis_values()['PHI'])
+
+        all_zeros = []
+        for col_idx in range(vals.shape[1]):
+            if np.allclose(vals[:, col_idx], 0.0):
+                all_zeros.append(col_idx)
+
+        logging.info(f'basis fcns that are all zeros: {all_zeros}')
+        self.points = Pts[:,:3]
+        self.weights = Pts[:,3]
+        self.phi = vals
+        self.gridInfo["type"] = "spherical"
+        self.gridInfo["minDist"] = minDist
+        self.gridInfo["maxDist"] = maxDist
+        self.gridInfo["nRadical"] = nRadial
+        self.gridInfo["nSphere"] = nSphere
+        self.gridInfo["nPoints"] = len(self.points)
+        self.gridInfo["radialScheme"]  = radialScheme
+        self.gridInfo["pruningScheme"] = pruningScheme
+        logging.info(f"genSphereTime: {time.perf_counter()-start:10.2f} s")
+        
+        
+        
+        
         
 class pointGrid(myGrid):
     def __init__(self,

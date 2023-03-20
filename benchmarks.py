@@ -6,6 +6,7 @@ import psi4
 import numpy as np
 import logging,time
 
+
 def testANCMolecule(prec):
     M = myMolecule("tests/6-QM7/1218.xyz","def2-TZVPD-decon")
     Gs = sphericalGrid(M,minDist=0.01)   
@@ -435,8 +436,86 @@ def testANCvsExactPotential():
     """
 
 
+def testSphericalAtomicGrid():
+    M = myMolecule("tests/CH3Cl.xyz","def2-TZVP")
+    Gas = sphericalAtomicGrid(M,"Cl",minDist=0.0,maxDist=1.2,nRadial=300,nSphere=590,pruningScheme="None") 
+    Vas = Gas.optimizeBasis(potentialType="anc",a=2)
+    Gas.printStats(Vas)
+    Gas.exportErrorVsDistance(Vas)
+    
+    
+def testSpericalAtomicGridCoeff(atomType="C"):
+    from scipy.optimize import minimize
+    from vpot.calc.grids import sphericalAtomicGrid
+    from psi4.driver import qcdb
+    
+    def getCoeffsAndExps(basisDict,atomType):
+        out = []
+        for i in basisDict["shell_map"]:
+            if i[0] == atomType:
+                for j in i[2:]:
+                    for k in j[1:]:
+                        out.append(k)
+        return(out)
 
+    def optmizeBasis(x0,M,atomType):
+        optmizeBasis.counter+=1
+        xmod = x0
+        counter = 0
+        a,newBasis = qcdb.BasisSet.pyconstruct(M.psi4Mol.to_dict(),'BASIS', 
+                                               "def2-SVP",fitrole='ORBITAL',
+                                              other=None,return_dict=True,return_atomlist=False)
 
+        for i in newBasis["shell_map"]:
+            del i[2:]
+
+        for c,i in enumerate(M.basisDict["shell_map"]):
+            if i[0] == atomType:
+                for j in i[2:]:
+                    newBas = []
+                    newBas.append(j[0])
+                    for k in j[1:]:
+                        newBas.append((xmod[counter],xmod[counter+1]))
+                        counter+=2
+                    newBasis["shell_map"][c] += [newBas]
+
+        M.setBasisDict(newBasis,quiet=True)
+        logging.info(getCoeffsAndExps(M.basisDict,atomType))
+
+        Gs=sphericalAtomicGrid(M,atomType,minDist=0.0,maxDist=1.2,nRadial=300,nSphere=590,pruningScheme="None") 
+        Vs = Gs.optimizeBasis(potentialType="anc",a=2)
+        Error = Gs.getMSError(Vs)
+
+        logging.info(f"ERROR FROM AUGMENTBASIS: {Error}")
+        logging.info(getCoeffsAndExps(M.basisDict,atomType))
+
+        if (optmizeBasis.counter %1)==0:
+            print(f"Count: {optmizeBasis.counter}, Error {Error}")
+        return Error
+
+    
+    atomType = atomType.upper()
+    M = myMolecule("tests/CH3Cl.xyz","")
+    Gas = sphericalAtomicGrid(M,atomType,minDist=0.0,maxDist=1.2,nRadial=300,nSphere=590,pruningScheme="None") 
+    Vas = Gas.optimizeBasis(potentialType="anc",a=2)
+    Gas.printStats(Vas)
+    Gas.exportErrorVsDistance(Vas)
+    
+    
+    xinit = np.array(getCoeffsAndExps(M.basisDict,atomType))
+    xinit = xinit.flatten()
+    
+    bounds = [(0.1,100000.0) if (c%2==0) else (None,None) for c,x in enumerate(xinit) ]
+
+    optmizeBasis.counter=0
+    result = minimize(optmizeBasis,xinit,args=(M,atomType),bounds=bounds)
+    
+    print(result)
+
+    return result,M
+    
+    
+    
 
 if __name__ == "__main__":
 
@@ -465,7 +544,7 @@ if __name__ == "__main__":
     #plotPotentialOfAtomANC()
     #testANCMolecule(1)
     #testANCMolecule(2)
-    testANCvsExactPotential()
+    #testANCvsExactPotential()
 
     #testMyDFT()
     #testPotentialDFT()
