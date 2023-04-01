@@ -1,4 +1,5 @@
-from vpot.calc import myMolecule, sphericalGrid, blockGrid
+from vpot.calc.grids import sphericalGrid, blockGrid
+from vpot.calc import myMolecule
 from vpot.calc.potential import vpot,vBpot, vpotANC
 from vpot.calc import DFTGroundState
 from matplotlib import pyplot as plt
@@ -458,18 +459,18 @@ def testSpericalAtomicGridCoeff(atomType="C"):
                         out.append(k)
         return(out)
 
-    def optmizeBasis(x0,M,atomType):
+    def optmizeBasis(x0,Gs,atomType):
         optmizeBasis.counter+=1
         xmod = x0
         counter = 0
-        a,newBasis = qcdb.BasisSet.pyconstruct(M.psi4Mol.to_dict(),'BASIS', 
+        a,newBasis = qcdb.BasisSet.pyconstruct(Gs.mol.psi4Mol.to_dict(),'BASIS', 
                                                "def2-SVP",fitrole='ORBITAL',
                                               other=None,return_dict=True,return_atomlist=False)
 
         for i in newBasis["shell_map"]:
             del i[2:]
 
-        for c,i in enumerate(M.basisDict["shell_map"]):
+        for c,i in enumerate(Gs.mol.basisDict["shell_map"]):
             if i[0] == atomType:
                 for j in i[2:]:
                     newBas = []
@@ -479,10 +480,10 @@ def testSpericalAtomicGridCoeff(atomType="C"):
                         counter+=2
                     newBasis["shell_map"][c] += [newBas]
 
-        M.setBasisDict(newBasis,quiet=True)
+        Gs.mol.setBasisDict(newBasis,quiet=True)
         logging.info(getCoeffsAndExps(M.basisDict,atomType))
 
-        Gs=sphericalAtomicGrid(M,atomType,minDist=0.0,maxDist=1.2,nRadial=300,nSphere=590,pruningScheme="None") 
+        Gs.projectBasis()
         Vs = Gs.optimizeBasis(potentialType="anc",a=2)
         Error = Gs.getMSError(Vs)
 
@@ -508,7 +509,7 @@ def testSpericalAtomicGridCoeff(atomType="C"):
     bounds = [(0.1,100000.0) if (c%2==0) else (None,None) for c,x in enumerate(xinit) ]
 
     optmizeBasis.counter=0
-    result = minimize(optmizeBasis,xinit,args=(M,atomType),bounds=bounds)
+    result = minimize(optmizeBasis,xinit,args=(Gas,atomType),bounds=bounds)
     
     print(result)
 

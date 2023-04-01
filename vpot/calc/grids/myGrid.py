@@ -29,7 +29,55 @@ class myGrid(object):
 
     def getMSError(self,V):
         return np.mean(np.square((vBpot(self.phi,V.diagonal()) - self.vpot )))
+
+    def getMaxError(self,V):
+        return np.max(np.square((vBpot(self.phi,V.diagonal()) - self.vpot )))
+
+    def optimizeBasisWeights(self,expPref=[1.0,1.0],potentialType:str="anc",a:int=2):
+        start = time.perf_counter()
         
+        """
+        we try to solve
+        A.X = B
+        phi.C = Vpot
+        
+        
+        we try to use the the weights from 
+        """
+        
+        Dist    = np.array([np.linalg.norm(self.points[:,:3] - x,axis=1) for x in self.mol.geom]).transpose()
+        Dmin    = np.min(Dist,axis=1)
+        
+        #W = np.sqrt(0.5*(1-np.exp(-(Dmin/2)**5))+0.5)
+        W = expPref[1]*np.exp(-(Dmin*expPref[0])**2)
+        if (potentialType == "exact"):
+            #W  = np.sqrt(self.weights)
+            Aw = (self.phi.T*W).T
+            Bw = -vpot(self.mol.geom,self.mol.elez,self.points) * W
+            VMat, resis,_,_ = np.linalg.lstsq(Aw, Bw,rcond=-1)
+            self.vpot = -vpot(self.mol.geom, self.mol.elez,self.points)
+
+        elif (potentialType == "anc"):
+            #W  = np.sqrt(self.weights)
+            Aw =  (self.phi.T*W).T
+            Bw = -vpotANC(self.mol.geom,self.mol.elez,self.points , a) *W
+            VMat, resis,_,_ = np.linalg.lstsq(Aw,Bw,rcond=-1)
+            self.vpot = vpotANC(self.mol.geom, self.mol.elez, self.points , a)
+
+        else:
+            raise(f"Unknown potential {potentialType}")
+
+        mints = psi4.core.MintsHelper(self.mol.basisSet)
+        X =mints.ao_overlap().np
+        for c1,i in enumerate(VMat):
+            X[c1,c1] = i
+
+        logging.info(f"resis : {resis} ")
+        logging.info(f"optimizeBasis time: {time.perf_counter()-start:10.2f} s")
+        return X
+
+
+
     def optimizeBasis(self,potentialType:str = "exact",a:int = 2):
         start = time.perf_counter()
         

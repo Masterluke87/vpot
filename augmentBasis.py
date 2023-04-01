@@ -1,85 +1,43 @@
-from vpot.calc import myMolecule, sphericalGrid, blockGrid, pointGrid
+from vpot.calc import myMolecule
+from vpot.calc.grids import sphericalGrid, blockGrid, pointGrid,sphericalAtomicGrid,blockAtomicGrid,sphericalIndexGrid
 from vpot.calc.potential import vpot,vBpot, vpotANC
-import numpy as np
-from psi4.driver import qcdb
-import logging,time
+from vpot.calc import DFTGroundState
+from matplotlib import pyplot as plt
+from scipy.special import erf
 from scipy.optimize import minimize
-from matplotlib import pylab as plt
-
-plt.style.use('dark_background')
-
-
-def getCoeffsAndExps(basisDict):
-    out = []
-    for i in basisDict["shell_map"]:
-        for j in i[2:]:
-            for k in j[1:]:
-                out.append(k)
-    return(out)
+from vpot.calc.grids import sphericalAtomicGrid
+from psi4.driver import qcdb
+from ase.data import atomic_numbers
 
 
+import psi4
+import numpy as np
+import logging,time
 
-def optmizeBasis(x0,M):
-    optmizeBasis.counter+=1
-    xmod = x0
-    counter = 0
-    a,newBasis = qcdb.BasisSet.pyconstruct(M.psi4Mol.to_dict(),'BASIS', 
-                                           "def2-SVP",fitrole='ORBITAL',
-                                          other=None,return_dict=True,return_atomlist=False)
-
-    for i in newBasis["shell_map"]:
-        del i[2:]
-        
-    for c,i in enumerate(M.basisDict["shell_map"]):
-        for j in i[2:]:
-            newBas = []
-            newBas.append(j[0])
-            for k in j[1:]:
-                newBas.append((xmod[counter],xmod[counter+1]))
-                counter+=2
-            newBasis["shell_map"][c] += [newBas]
-    
-    M.setBasisDict(newBasis,quiet=True)
-    logging.info(getCoeffsAndExps(M.basisDict))
-    
-    Gs=sphericalGrid(M,minDist=0.0,maxDist=1.2,nRadial=300,nSphere=590,pruningScheme="None") 
-    Vs = Gs.optimizeBasis(potentialType="anc",a=2)
-    Error = Gs.getMSError(Vs)
-
-    logging.info(f"ERROR FROM AUGMENTBASIS: {Error}")
-    logging.info(getCoeffsAndExps(M.basisDict))
-    
-    if (optmizeBasis.counter %100)==0:
-        print(f"Count: {optmizeBasis.counter}, Error {Error}")
-    return Error
-
+plt.style.use("dark_background")
 
 if __name__ == "__main__":
-    
-    logging.basicConfig(filename='augmentBasis.log', level=logging.INFO,filemode="w")
+    nSphere = 590
+    nRadial = 300
+    prec=2
 
-    M = myMolecule("./tests/CH3Cl.xyz","")
-    Gs=sphericalGrid(M,minDist=0.0,maxDist=1.2,nRadial=300,nSphere=590,pruningScheme="None") 
+    M = myMolecule("tests/CH3Cl.xyz","def2-TZVP")
 
-    Vs = Gs.optimizeBasis(potentialType="anc",a=2)
-    Gs.printStats(Vs,output="print")
-    Gs.exportErrorVsDistance(Vs)
+    atomIdx = 2
+    M.keepAugmentBasisForIndex(atomIdx)
 
-    counter = 0
-    for i in M.basisDict["shell_map"]:
-        for j in i[2:]:
-            for k in j[1:]:
-                counter += 1 
-            
-    print(f"Basis set has {counter} degrees of freedom")
+    a,newOrb = qcdb.BasisSet.pyconstruct(M.psi4Mol.to_dict(),'BASIS',
+                                            "def2-TZVP",fitrole='ORBITAL',
+                                            other=None,return_dict=True,return_atomlist=False)
+    for i in newOrb["shell_map"]:
+            del i[2:]
 
-    xinit = np.array(getCoeffsAndExps(M.basisDict))
-    xinit[:,0] = xinit[:,0]
-    xinit = xinit.flatten()
-    
-    bounds = [(0.1,100000.0) if (c%2==0) else (None,None) for c,x in enumerate(xinit) ]
+    for c,i in enumerate(M.getOrbitalDict()["shell_map"]):
+        if c == atomIdx:
+            newOrb["shell_map"][c] += i[2:]
 
-    optmizeBasis.counter=0
-    
-    result = minimize(optmizeBasis,xinit,args=(M),bounds=bounds)
-    print(result)
+    breakpoint()
+    M.setBasisDict(orbitalDict=newOrb,augmentDict=M.getAugmentDict())
+
+    Gb =  sphericalIndexGrid(M,atomIdx,minDist=0.0,maxDist=2.0,nSphere=nSphere,nRadial=nRadial,pruningScheme="None") 
+    V1 = Gb.optimizeBasis(potentialType="anc",a=2)
