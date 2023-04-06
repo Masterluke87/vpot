@@ -2,6 +2,7 @@ import psi4
 import logging
 import numpy as np
 from matplotlib import pyplot as plt
+import copy
 import time
 from vpot.calc import myMolecule
 from vpot.calc.potential import vpot,vBpot,vpotANC
@@ -68,11 +69,11 @@ class pointGrid(myGrid):
     def __init__(self,
                  mol: myMolecule,
                  points: np.array):
-        self.points = points
+        self.points = copy.deepcopy(points)
         self.mol = mol
         
-        delta = 0.001
-        basis_extents = psi4.core.BasisExtents(mol.basisSet, delta)
+        
+        basis_extents = psi4.core.BasisExtents(mol.basisSet, 0.0)
         xs = psi4.core.Vector.from_array(self.points[:,0])
         ys = psi4.core.Vector.from_array(self.points[:,1])
         zs = psi4.core.Vector.from_array(self.points[:,2])
@@ -82,14 +83,10 @@ class pointGrid(myGrid):
         max_points = blockopoints.npoints()
         max_functions = mol.basisSet.nbf()
         funcs = psi4.core.BasisFunctions(mol.basisSet, max_points, max_functions)
-        lpos = np.array(blockopoints.functions_local_to_global())
-        npoints = blockopoints.npoints()
+        
 
         funcs.compute_functions(blockopoints)
-        phi = np.array(funcs.basis_values()["PHI"])[:npoints, :lpos.shape[0]]
-
-        vals = np.array(funcs.basis_values()['PHI'])
-        self.phi = vals
+        self.phi = np.array(funcs.basis_values()['PHI'])
         
 
 class blockGrid(myGrid):

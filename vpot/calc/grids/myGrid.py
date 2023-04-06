@@ -78,23 +78,28 @@ class myGrid(object):
 
 
 
-    def optimizeBasis(self,potentialType:str = "exact",a:int = 2):
+    def optimizeBasis(self,potentialType = "exact",a:int = 2):
         start = time.perf_counter()
-        
-        if (potentialType == "exact"):
-            VMat, resis,_,_ = np.linalg.lstsq(self.phi, -vpot(self.mol.geom,
+
+        if (type(potentialType)==str):
+            if (potentialType == "exact"):
+                VMat, resis,_,_ = np.linalg.lstsq(self.phi, -vpot(self.mol.geom,
                                                       self.mol.elez,
                                                       self.points),rcond=-1)
-            self.vpot = -vpot(self.mol.geom, self.mol.elez,self.points)
+                self.vpot = -vpot(self.mol.geom, self.mol.elez,self.points)
 
-        elif (potentialType == "anc"):
-            VMat, resis,_,_ = np.linalg.lstsq(self.phi, -vpotANC(self.mol.geom,
-                                                       self.mol.elez,
-                                                       self.points , a),rcond=-1)
-            self.vpot = vpotANC(self.mol.geom, self.mol.elez, self.points , a)
+            elif (potentialType == "anc"):
+                VMat, resis,_,_ = np.linalg.lstsq(self.phi, -vpotANC(self.mol.geom,
+                                                           self.mol.elez,
+                                                           self.points , a),rcond=-1)
+                self.vpot = vpotANC(self.mol.geom, self.mol.elez, self.points , a)
 
+        elif (type(potentialType)==np.ndarray):
+            VMat, resis,_,_ = np.linalg.lstsq(self.phi, -potentialType,rcond=-1)
+            self.vpot = potentialType
         else:
-            raise(f"Unknown potential {potentialType}")
+            raise TypeError("Unknown Potential type")
+
 
         mints = psi4.core.MintsHelper(self.mol.basisSet)
         X =mints.ao_overlap().np
