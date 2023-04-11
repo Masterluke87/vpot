@@ -27,6 +27,31 @@ class myGrid(object):
 
         self.vpot  = None
 
+    def updateMol(self,newMol):
+        self.mol = newMol
+        self._projectBasis()
+
+    def _projectBasis(self):
+        """
+        This function uses the self.mol object and the basis set in it to project the basis functions onto
+        the grid point
+        """
+
+        basis_extents = psi4.core.BasisExtents(self.mol.basisSet, 0.0)
+        
+        xs = psi4.core.Vector.from_array(self.points[:,0])
+        ys = psi4.core.Vector.from_array(self.points[:,1])
+        zs = psi4.core.Vector.from_array(self.points[:,2])
+        ws = psi4.core.Vector.from_array(self.weights)
+
+        blockopoints = psi4.core.BlockOPoints(xs, ys, zs, ws, basis_extents)
+        max_points = blockopoints.npoints()
+        max_functions = self.mol.basisSet.nbf()
+        funcs = psi4.core.BasisFunctions(self.mol.basisSet, max_points, max_functions)
+        
+        funcs.compute_functions(blockopoints)
+        self.phi = np.array(funcs.basis_values()['PHI'])
+
     def getMSError(self,V):
         return np.mean(np.square((vBpot(self.phi,V.diagonal()) - self.vpot )))
 
@@ -140,10 +165,6 @@ class myGrid(object):
         else:
             plt.show()
         
-        
-
-
-
     def printStats(self, V, output="logger"):
         if output=="logger":
             logging.info(f"GridInfo : {self.gridInfo} ")

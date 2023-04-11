@@ -40,13 +40,13 @@ def DFTGroundState(mol,func,**kwargs):
         print(f"{key:20s} {str(value):20s}")
 
     printHeader("Basis Set:",2)
-    wfn   = psi4.core.Wavefunction.build(mol.psi4Mol,options["BASIS"])
-    aux   = psi4.core.BasisSet.build(mol.psi4Mol, "DF_BASIS_SCF", "", "JKFIT", options["BASIS"],puream=1 if wfn.basisset().has_puream() else 0)
+    wfn   = psi4.core.Wavefunction.build(mol.psi4Mol,mol.basisSet)
+    aux   = psi4.core.BasisSet.build(mol.psi4Mol, "DF_BASIS_SCF", "", "JKFIT", mol.basisString, puream=1 if wfn.basisset().has_puream() else 0)
 
     sup = psi4.driver.dft.build_superfunctional(func, False)[0]
 
     psi4.core.be_quiet()
-    mints = psi4.core.MintsHelper(wfn.basisset())
+    mints = psi4.core.MintsHelper(mol.basisSet)
     
     
     sup.allocate()

@@ -1,6 +1,8 @@
 import psi4
 from ase.io import read 
 from ase.atoms import Atoms
+import itertools
+from ase.units import Bohr
 import numpy as np
 from psi4.driver import qcdb
 from copy import deepcopy
@@ -236,6 +238,17 @@ class myMolecule(object):
         E,wfn = psi4.energy(f"{method}/{self.basisString}", return_wfn=True)
 
         return E,wfn
+
+    def getCloseNeighbors(self,thresh=2.0,printDist=False):
+        neighbors = [] 
+
+        for (i,j) in itertools.combinations(range(len(self.geom)),2):
+            if (np.linalg.norm(self.geom[i]-self.geom[j])*Bohr)<thresh:
+                neighbors.append((i,j))
+            if printDist:
+                print(f"({i},{j}: {(np.linalg.norm(self.geom[i]-self.geom[j])*Bohr)}")
+
+        return neighbors
 
 
 

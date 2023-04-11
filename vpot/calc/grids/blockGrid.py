@@ -70,23 +70,9 @@ class pointGrid(myGrid):
                  mol: myMolecule,
                  points: np.array):
         self.points = copy.deepcopy(points)
+        self.weights = np.ones(len(self.points))
         self.mol = mol
-        
-        
-        basis_extents = psi4.core.BasisExtents(mol.basisSet, 0.0)
-        xs = psi4.core.Vector.from_array(self.points[:,0])
-        ys = psi4.core.Vector.from_array(self.points[:,1])
-        zs = psi4.core.Vector.from_array(self.points[:,2])
-        ws = psi4.core.Vector.from_array(np.ones(len(self.points)))
-
-        blockopoints = psi4.core.BlockOPoints(xs, ys, zs, ws, basis_extents)
-        max_points = blockopoints.npoints()
-        max_functions = mol.basisSet.nbf()
-        funcs = psi4.core.BasisFunctions(mol.basisSet, max_points, max_functions)
-        
-
-        funcs.compute_functions(blockopoints)
-        self.phi = np.array(funcs.basis_values()['PHI'])
+        self._projectBasis()
         
 
 class blockGrid(myGrid):
@@ -114,11 +100,6 @@ class blockGrid(myGrid):
                        maxDist: float = 7.5):
         mol = self.mol
 
-
-        delta = 0.001
-        basis_extents = psi4.core.BasisExtents(mol.basisSet, delta)
-
-
         xdim = np.arange(cube["xmin"],cube["xmax"],gridSpacing)
         ydim = np.arange(cube["ymin"],cube["ymax"],gridSpacing)
         zdim = np.arange(cube["zmin"],cube["zmax"],gridSpacing)
@@ -134,6 +115,8 @@ class blockGrid(myGrid):
         Pts     = P[np.where((Dmin>minDist) & (Dmin < maxDist))]
         
         self.points = Pts[:,:3]
+        self.weights = np.ones(len(self.points))
+
         self.gridInfo["type"] = "block"
         self.gridInfo["minDist"] = minDist
         self.gridInfo["nPoints"] = len(self.points)
@@ -142,30 +125,6 @@ class blockGrid(myGrid):
         self.gridInfo["ydim"] = len(ydim)
         self.gridInfo["zdim"] = len(zdim)
 
-    def projectBasis(self):
-
-        mol = self.mol
-        basis_extents = psi4.core.BasisExtents(mol.basisSet, 0.0)
-
-
-        xs = psi4.core.Vector.from_array(self.points[:,0])
-        ys = psi4.core.Vector.from_array(self.points[:,1])
-        zs = psi4.core.Vector.from_array(self.points[:,2])
-        ws = psi4.core.Vector.from_array(np.ones(len(self.points)))
-
-        blockopoints = psi4.core.BlockOPoints(xs, ys, zs, ws, basis_extents)
-        max_points = blockopoints.npoints()
-        max_functions = mol.basisSet.nbf()
-        funcs = psi4.core.BasisFunctions(mol.basisSet, max_points, max_functions)
-        lpos = np.array(blockopoints.functions_local_to_global())
-        npoints = blockopoints.npoints()
-
-        funcs.compute_functions(blockopoints)
-        
-        vals = np.array(funcs.basis_values()['PHI'])
-        self.phi = vals
-
-
     def _genBlockGrid(self, 
                      cube: dict,
                      gridSpacing: float = 0.2,
@@ -173,7 +132,7 @@ class blockGrid(myGrid):
                      maxDist: float = 7.5
                      ):
         self.genBlockPoints(cube,gridSpacing,minDist,maxDist)
-        self.projectBasis()
+        self._projectBasis()
         
 
 class blockAtomicGrid(myGrid):
@@ -202,11 +161,6 @@ class blockAtomicGrid(myGrid):
                        maxDist: float = 7.5):
         mol = self.mol
 
-
-        delta = 0.001
-        basis_extents = psi4.core.BasisExtents(mol.basisSet, delta)
-
-
         xdim = np.arange(cube["xmin"],cube["xmax"],gridSpacing)
         ydim = np.arange(cube["ymin"],cube["ymax"],gridSpacing)
         zdim = np.arange(cube["zmin"],cube["zmax"],gridSpacing)
@@ -227,6 +181,8 @@ class blockAtomicGrid(myGrid):
         Pts     = P[np.where((Dmin>minDist) & (Dmin < maxDist))]
         
         self.points = Pts[:,:3]
+        self.weights = np.ones(len(self.points))
+
         self.gridInfo["type"] = "block"
         self.gridInfo["minDist"] = minDist
         self.gridInfo["nPoints"] = len(self.points)
@@ -234,30 +190,6 @@ class blockAtomicGrid(myGrid):
         self.gridInfo["xdim"] = len(xdim)
         self.gridInfo["ydim"] = len(ydim)
         self.gridInfo["zdim"] = len(zdim)
-
-    def projectBasis(self):
-
-        mol = self.mol
-        basis_extents = psi4.core.BasisExtents(mol.basisSet, 0.0)
-
-
-        xs = psi4.core.Vector.from_array(self.points[:,0])
-        ys = psi4.core.Vector.from_array(self.points[:,1])
-        zs = psi4.core.Vector.from_array(self.points[:,2])
-        ws = psi4.core.Vector.from_array(np.ones(len(self.points)))
-
-        blockopoints = psi4.core.BlockOPoints(xs, ys, zs, ws, basis_extents)
-        max_points = blockopoints.npoints()
-        max_functions = mol.basisSet.nbf()
-        funcs = psi4.core.BasisFunctions(mol.basisSet, max_points, max_functions)
-        lpos = np.array(blockopoints.functions_local_to_global())
-        npoints = blockopoints.npoints()
-
-        funcs.compute_functions(blockopoints)
-        
-        vals = np.array(funcs.basis_values()['PHI'])
-        self.phi = vals
-
 
     def _genBlockGrid(self, 
                      cube: dict,
@@ -267,7 +199,7 @@ class blockAtomicGrid(myGrid):
                      maxDist: float = 7.5
                      ):
         self.genBlockPoints(cube,atomType,gridSpacing,minDist,maxDist)
-        self.projectBasis()
+        self._projectBasis()
 
 
 if __name__ == "__main__":
