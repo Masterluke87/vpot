@@ -160,7 +160,7 @@ class myGrid(object):
             plt.legend()
             
         if path:
-            plt.savefig(f"{path}")
+            plt.savefig(f"{path}",dpi=300)
             plt.clf()
         else:
             plt.show()

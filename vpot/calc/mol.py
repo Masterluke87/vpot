@@ -230,7 +230,7 @@ class myMolecule(object):
     def runPSI4(self,method : str):
         
         psi4.geometry(f"""
-            {self._readXYZFile(self.xyzFile)}
+            {self._readXYZFile(self.xyzFile,labelAtoms=False)}
             symmetry c1
             nocom
             noreorient
@@ -240,6 +240,9 @@ class myMolecule(object):
         return E,wfn
 
     def getCloseNeighbors(self,thresh=2.0,printDist=False):
+        """
+        NOTE: We do Angstrom conversion
+        """
         neighbors = [] 
 
         for (i,j) in itertools.combinations(range(len(self.geom)),2):

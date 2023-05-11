@@ -4,8 +4,10 @@ from vpot.calc.potential import vpot,vBpot, vpotANC
 from vpot.calc import DFTGroundState
 from matplotlib import pyplot as plt
 import numpy as np
+import os
+from matplotlib.colors import SymLogNorm,CenteredNorm
 
-class Optimizer(object):
+class threeStepOptimizer(object):
     
     def unwrapMatrix(self, M):
         dim = sum([len(x) for x in M])
@@ -232,20 +234,143 @@ class Optimizer(object):
         self.optimizeTotalBasis()
 
 
+class simpleOptimizer(object):
+
+    def __saveInputQuantities(self):
+        M = myMolecule(self.pathToMolecule,self.orbitalBasisSet,augmentBasis=True,labelAtoms=False)
+
+        info = {"Path" : self.pathToMolecule,
+                "BasisSet" : self.orbitalBasisSet,
+                "Functional" : self.functional,
+                "nSphere" : self.nSphere,
+                "nRadial" : self.nRadial,
+                "minDist" : 0.0,
+                "maxDist" : 4.0}    
+
+        np.savez_compressed(f"{self.path}/input.npz",
+                C_V_ANC=self.C_V_ANC,
+                V_ANC_B=self.V_ANC_B,
+                V_EXT=self.V_EXT,
+                NEL = M.nElectrons,
+                INFO=info)
+
+    def __plotCMatrix(self):
+        fig = plt.figure()
+        ax = fig.add_subplot()
+        im = ax.imshow(self.C_V_ANC,cmap="seismic",
+                       norm=SymLogNorm(linthresh=1.0,vmin=-np.max(np.abs(self.C_V_ANC)),
+                       vmax=np.max(np.abs(self.C_V_ANC))))
+        fig.colorbar(im)
+        ax.set_title(r"$C^{v,anc}_{\mu \nu}$")
+        ax.set_ylabel(r"$ \mu\ \mathrm{index}$")
+        ax.set_xlabel(r"$ \nu\ \mathrm{index}$")
+        fig.tight_layout()
+        fig.savefig(f"{self.path}/C_v_anc.png",dpi=300)
+
+    def __plotTotalBasis(self,idx1=0,idx2=1):
+        Mt = myMolecule(self.pathToMolecule,self.orbitalBasisSet,augmentBasis=True,labelAtoms=True)
+        P1 = Mt.geom[idx1]
+        P2 = Mt.geom[idx2]
+
+        v = P2-P1
+        r = np.arange(-0.5,np.linalg.norm(v)+0.5,0.01)
+
+        L = np.array([P1 + i*v/np.linalg.norm(v) for i in r])
+
+        GLt = pointGrid(Mt,L)
+        VBAS = vBpot(GLt.phi,self.C_V_ANC.diagonal())
+        VANC = vpotANC(GLt.mol.geom,GLt.mol.elez,L,self.prec)
+        VPOT = vpot(GLt.mol.geom,GLt.mol.elez,L)
+
+        plt.plot(r,VBAS,label=r"$v_{anc,B}$",color="red")
+        plt.plot(r,VANC,label=r"$v_{anc}$",color="green")
+        plt.plot(r,VPOT,label=r"$v_{ext}$",color="blue")
+
+        plt.legend()
+        plt.ylabel("External Potential [a.u.]")
+        plt.xlabel("Distance [a.u.]")
+
+        plt.ylim((1.1*np.min(VANC),10))
+        plt.savefig(f"{self.path}/bond_{idx1}_{idx2}.png",dpi=300)
+        plt.clf()
+
+    def __plotAllNeigborsTotalBasis(self):
+        M = myMolecule(self.pathToMolecule,self.orbitalBasisSet,augmentBasis=True,labelAtoms=True)
+
+        for i,j in M.getCloseNeighbors(thresh=1.8):
+            self.__plotTotalBasis(i,j)
+
+    def __optimizeTotalBasis(self):
+        Mt = myMolecule(self.pathToMolecule,self.orbitalBasisSet,augmentBasis=True,labelAtoms=True)
+        Gs = sphericalGrid(Mt,minDist=0.0,maxDist=4.0,nSphere=self.nSphere,nRadial=self.nRadial,pruningScheme="None") 
+        Vs = Gs.optimizeBasis(potentialType="anc",a=2)
+
+
+        Gs.exportErrorVsDistance(Vs,plotPot=False,path=f"{self.path}/error.png")
+
+        self.C_V_ANC = Vs
+
+    def __getVpotMatrices(self):
+
+        M = myMolecule(self.pathToMolecule,self.orbitalBasisSet,augmentBasis=True,labelAtoms=False)
+        Gs = sphericalGrid(M,minDist=0.0,maxDist=15.0,nRadial=300,nSphere=590,pruningScheme="None")
+
+        self.V_EXT = M.ao_pot
+        self.V_ANC_B = np.einsum("ji,j,jk,j->ik",Gs.phi,vBpot(Gs.phi,self.C_V_ANC.diagonal()),Gs.phi,Gs.weights)
+
+
+    
+
+    def __init__(self,pathToMolecule,orbitalBasisSet,functional):
+        
+        self.nSphere = 590
+        self.nRadial = 200
+        self.prec = 2
+
+        self.pathToMolecule  = pathToMolecule
+        self.path= os.path.dirname(pathToMolecule)
+        
+        self.orbitalBasisSet = orbitalBasisSet
+        self.functional = functional
+        self.residue = None
+
+        self.C_V_ANC = None
+        self.V_ANC_B = None
+        self.V_EXT = None
+
+        self.__optimizeTotalBasis()
+        self.__plotAllNeigborsTotalBasis()
+        self.__plotCMatrix()
+
+        self.__getVpotMatrices()
+        self.__saveInputQuantities()
+        
+        
+
+
+
+
+
+
+
+
+
 if __name__ == "__main__":
     from vpot.calc import DFTGroundState
     
-    opti = Optimizer("tests/CH3Cl.xyz","def2-TZVP")      
-    M = myMolecule("tests/CH3Cl.xyz","def2-TZVP")
+    # opti = threeStepOptimizer("tests/CH3Cl.xyz","def2-TZVP")      
+    # M = myMolecule("tests/CH3Cl.xyz","def2-TZVP")
 
-    Gs = sphericalGrid(M,minDist=0.0,maxDist=4.0,nRadial=opti.nRadial,nSphere=opti.nSphere,pruningScheme="None")
-    VPOT = np.einsum("ji,j,jk,j->ik",Gs.phi,vpot(Gs.mol.geom,Gs.mol.elez,Gs.points),Gs.phi,Gs.weights)
+    # Gs = sphericalGrid(M,minDist=0.0,maxDist=4.0,nRadial=opti.nRadial,nSphere=opti.nSphere,pruningScheme="None")
+    # VPOT = np.einsum("ji,j,jk,j->ik",Gs.phi,vpot(Gs.mol.geom,Gs.mol.elez,Gs.points),Gs.phi,Gs.weights)
 
-    MyDFT,_ = DFTGroundState(M,"PBE",AOPOT=VPOT, GAMMA=0.8)
-    EPsi,_ = DFTGroundState(M,"PBE", GAMMA=0.8)
+    # MyDFT,_ = DFTGroundState(M,"PBE",AOPOT=VPOT, GAMMA=0.8)
+    # EPsi,_ = DFTGroundState(M,"PBE", GAMMA=0.8)
+
+    opti = simpleOptimizer("tests/6-QM7/1/1.xyz","def2-TZVP","PBE")
 
 
-    print(f"VBAS: {MyDFT} VPOT: {EPsi}")
+    #print(f"VBAS: {MyDFT} VPOT: {EPsi}")
 
 
 
