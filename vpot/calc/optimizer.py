@@ -287,7 +287,7 @@ class simpleOptimizer(object):
         P2 = Mt.geom[idx2]
 
         v = P2-P1
-        r = np.arange(-0.5,np.linalg.norm(v)+0.5,0.01)
+        r = [x for x in np.arange(-0.5,np.linalg.norm(v)+0.5,0.02) if (abs(x)>0.01) and abs(x-np.linalg.norm(v))>0.01]
 
         L = np.array([P1 + i*v/np.linalg.norm(v) for i in r])
 
@@ -304,7 +304,7 @@ class simpleOptimizer(object):
         plt.ylabel("External Potential [a.u.]")
         plt.xlabel("Distance [a.u.]")
 
-        plt.ylim((1.1*np.min(VANC),10))
+        #plt.ylim((1.1*np.min(VANC),10))
         plt.savefig(f"{self.path}/bond_{idx1}_{idx2}.png",dpi=300)
         plt.clf()
 
@@ -426,7 +426,7 @@ if __name__ == "__main__":
     # EPsi,_ = DFTGroundState(M,"PBE", GAMMA=0.8)
 
     #opti = simpleOptimizer("tests/6-QM7/1/1.xyz","def2-TZVP","PBE")
-    opti = simpleOptimizer("tests/6-QM7/2/2.xyz","def2-TZVP","PBE")
+    opti = simpleOptimizer("tests/6-QM7/503/503.xyz","def2-TZVP","PBE")
 
     #print(f"VBAS: {MyDFT} VPOT: {EPsi}")
 
