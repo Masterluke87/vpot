@@ -332,7 +332,7 @@ class simpleOptimizer(object):
         Gs = sphericalGrid(M,minDist=0.0,maxDist=15.0,nRadial=300,nSphere=590,pruningScheme="None")
 
         self.V_EXT = M.ao_pot
-        self.V_ANC_B = np.einsum("ji,j,jk,j->ik",Gs.phi,vBpot(Gs.phi,self.C_V_ANC.diagonal()),Gs.phi,Gs.weights)
+        self.V_ANC_B = np.einsum("ji,j,jk,j->ik",Gs.phi,vBpot(Gs.phi,self.C_V_ANC.diagonal()),Gs.phi,Gs.weights,optimize=True)
 
 
     def __getDensities(self):
