@@ -245,7 +245,8 @@ class simpleOptimizer(object):
                 "nSphere" : self.nSphere,
                 "nRadial" : self.nRadial,
                 "minDist" : 0.0,
-                "maxDist" : 4.0}    
+                "maxDist" : 4.0,
+                "fitError" : self.residue}    
 
         np.savez_compressed(f"{self.path}/input.npz",
                 C_V_ANC=self.C_V_ANC,
@@ -253,6 +254,19 @@ class simpleOptimizer(object):
                 V_EXT=self.V_EXT,
                 NEL = M.nElectrons,
                 INFO=info)
+        
+    def __plotPMatrix(self):
+        fig = plt.figure()
+        ax = fig.add_subplot()
+        im = ax.imshow(self.P_ANC_B,cmap="seismic",
+                       norm=SymLogNorm(linthresh=1.0,vmin=-np.max(np.abs(self.P_ANC_B)),
+                       vmax=np.max(np.abs(self.P_ANC_B))))
+        fig.colorbar(im)
+        ax.set_title(r"$C^{v,anc}_{\mu \nu}$")
+        ax.set_ylabel(r"$ \mu\ \mathrm{index}$")
+        ax.set_xlabel(r"$ \nu\ \mathrm{index}$")
+        fig.tight_layout()
+        fig.savefig(f"{self.path}/P_anc_b.png",dpi=300)
 
     def __plotCMatrix(self):
         fig = plt.figure()
@@ -305,6 +319,8 @@ class simpleOptimizer(object):
         Gs = sphericalGrid(Mt,minDist=0.0,maxDist=4.0,nSphere=self.nSphere,nRadial=self.nRadial,pruningScheme="None") 
         Vs = Gs.optimizeBasis(potentialType="anc",a=2)
 
+        self.residue = Gs.getMSError(Vs)
+
 
         Gs.exportErrorVsDistance(Vs,plotPot=False,path=f"{self.path}/error.png")
 
@@ -319,7 +335,39 @@ class simpleOptimizer(object):
         self.V_ANC_B = np.einsum("ji,j,jk,j->ik",Gs.phi,vBpot(Gs.phi,self.C_V_ANC.diagonal()),Gs.phi,Gs.weights)
 
 
-    
+    def __getDensities(self):
+        """
+        Ok first calculate the densities with exact analytical external potential
+        """
+        
+        M = myMolecule(self.pathToMolecule,self.orbitalBasisSet,augmentBasis=True,labelAtoms=False)
+        E1,Da1,Db1 = DFTGroundState(M,"PBE",GAMMA=0.8,OUT=f"{self.path}/PSI_V_EXT.out")
+
+        if np.linalg.norm(Da1 - Db1) > 1E-10:
+            raise Exception("The densities are too different.")
+        
+        self.P_EXT = Da1 + Db1
+        self.E_EXT = E1
+
+        """
+        Now get the one with the Basis set expansion
+        """
+
+        E2,Da2,Db2 = DFTGroundState(M,"PBE",AOPOT=self.V_ANC_B,GAMMA=0.8,OUT=f"{self.path}/PSI_V_ANC.out")
+
+        if np.linalg.norm(Da2 - Db2) > 1E-10:
+            raise Exception("The densities are too different.")
+
+        self.P_ANC_B = Da2 + Db2
+        self.E_ANC_B = E2
+
+    def __saveOutputQuantities(self):
+        np.savez_compressed(f"{self.path}/output.npz",
+                            P_ANC_B = self.P_ANC_B,
+                            E_ANC_B = self.E_ANC_B,
+                            P_EXT = self.P_EXT,
+                            E_EXT = self.E_EXT)
+        
 
     def __init__(self,pathToMolecule,orbitalBasisSet,functional):
         
@@ -338,12 +386,22 @@ class simpleOptimizer(object):
         self.V_ANC_B = None
         self.V_EXT = None
 
+        self.P_EXT = None
+        self.P_ANC_B = None
+
+        self.E_EXT = None
+        self.E_ANC_B = None
+
         self.__optimizeTotalBasis()
         self.__plotAllNeigborsTotalBasis()
         self.__plotCMatrix()
 
         self.__getVpotMatrices()
         self.__saveInputQuantities()
+
+        self.__getDensities()
+        self.__saveOutputQuantities()
+        self.__plotPMatrix()
         
         
 
@@ -367,8 +425,8 @@ if __name__ == "__main__":
     # MyDFT,_ = DFTGroundState(M,"PBE",AOPOT=VPOT, GAMMA=0.8)
     # EPsi,_ = DFTGroundState(M,"PBE", GAMMA=0.8)
 
-    opti = simpleOptimizer("tests/6-QM7/1/1.xyz","def2-TZVP","PBE")
-
+    #opti = simpleOptimizer("tests/6-QM7/1/1.xyz","def2-TZVP","PBE")
+    opti = simpleOptimizer("tests/6-QM7/2/2.xyz","def2-TZVP","PBE")
 
     #print(f"VBAS: {MyDFT} VPOT: {EPsi}")
 

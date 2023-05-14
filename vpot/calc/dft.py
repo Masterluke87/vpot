@@ -17,6 +17,10 @@ def DFTGroundState(mol,func,**kwargs):
     """
     Perform unrestrictred Kohn-Sham
     """
+
+    if "OUT" in kwargs:
+        psi4.core.set_output_file(kwargs["OUT"])
+
     printHeader("Entering Ground State Kohn-Sham")
 
     options = {
@@ -37,7 +41,9 @@ def DFTGroundState(mol,func,**kwargs):
             options[i] = kwargs[i]
     printHeader("Options Run:",2)
     for key,value in options.items():
-        print(f"{key:20s} {str(value):20s}")
+        psi4.core.print_out(f"{key:20s} {str(value):20s} \n")
+
+    
 
     printHeader("Basis Set:",2)
     wfn   = psi4.core.Wavefunction.build(mol.psi4Mol,mol.basisSet)
@@ -330,19 +336,4 @@ def DFTGroundState(mol,func,**kwargs):
 
     psi4.core.print_out("\n\nFINAL GS SCF ENERGY: {:12.8f} [Ha] \n\n".format(SCF_E))
 
-    occa = np.zeros(nbf,dtype=np.float)
-    occb = np.zeros(nbf,dtype=np.float)
-
-    occa[:nalpha] = 1.0
-    occb[:nbeta]  = 1.0
-
-    MoldenWriter(options["PREFIX"]+'_gs.molden',wfn,Ca,Cb,epsa,epsb,occa,occb)
-    
-    psi4.core.print_out("Moldenfile written\n")
-    
-    np.savez(options["PREFIX"]+'_gsorbs',Ca=Ca,Cb=Cb,occa=occa,occb=occb,epsa=epsa,epsb=epsb)
-    psi4.core.print_out("Canoncical Orbitals written\n\n")                        
-
-    psi4.core.set_variable('CURRENT ENERGY', SCF_E)
-    psi4.core.set_variable('GS ENERGY', SCF_E)
-    return SCF_E, uhf
+    return SCF_E, Da, Db
