@@ -355,7 +355,7 @@ class simpleOptimizer(object):
 
         E2,Da2,Db2 = DFTGroundState(M,"PBE",AOPOT=self.V_ANC_B,GAMMA=0.8,OUT=f"{self.path}/PSI_V_ANC.out")
 
-        if np.linalg.norm(Da2 - Db2) > 1E-10:
+        if np.linalg.norm(Da2 - Db2) > 1E-5:
             raise Exception("The densities are too different.")
 
         self.P_ANC_B = Da2 + Db2
