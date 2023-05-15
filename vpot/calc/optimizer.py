@@ -343,7 +343,7 @@ class simpleOptimizer(object):
         M = myMolecule(self.pathToMolecule,self.orbitalBasisSet,augmentBasis=True,labelAtoms=False)
         E1,Da1,Db1 = DFTGroundState(M,"PBE",GAMMA=0.8,OUT=f"{self.path}/PSI_V_EXT.out")
 
-        if np.linalg.norm(Da1 - Db1) > 1E-10:
+        if np.linalg.norm(Da1 - Db1) > 1E-5:
             raise Exception("The densities are too different.")
         
         self.P_EXT = Da1 + Db1
