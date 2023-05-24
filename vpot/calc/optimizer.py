@@ -340,36 +340,32 @@ class simpleOptimizer(object):
         Ok first calculate the densities with exact analytical external potential
         """
 
-        if self.runMode == "safe":
-            gamma =0.95
-            maxiter = 500
-            diis_eps = 5.0
-            diis_len = 15
-        else:
-            gamma =0.80
-            maxiter = 150
-        
+
+        if not self.runMode:
+            self.runMode={"GAMMA" : 0.8,
+                          "MAXITER" : 150}
+                
         M = myMolecule(self.pathToMolecule,self.orbitalBasisSet,augmentBasis=True,labelAtoms=False)
-        E1,Da1,Db1 = DFTGroundState(M,"PBE",GAMMA=gamma,MAXITER=maxiter,DIIS_EPS=diis_eps,DIIS_LEN=diis_len,OUT=f"{self.path}/PSI_V_EXT.out")
+        res1 = DFTGroundState(M,"PBE",**self.runMode,OUT=f"{self.path}/PSI_V_EXT.out")
 
 
         if np.linalg.norm(Da1 - Db1) > 1E-5:
             raise Exception("The densities are too different.")
         
-        self.P_EXT = Da1 + Db1
-        self.E_EXT = E1
+        self.P_EXT = res1["Da"] + res1["Db"]
+        self.E_EXT = res1["SCF_E"]
 
         """
         Now get the one with the Basis set expansion
         """
 
-        E2,Da2,Db2 = DFTGroundState(M,"PBE",AOPOT=self.V_ANC_B,GAMMA=gamma,MAXITER=maxiter,DIIS_EPS=diis_eps,DIIS_LEN=diis_len,OUT=f"{self.path}/PSI_V_ANC.out")
+        res2 = DFTGroundState(M,"PBE",AOPOT=self.V_ANC_B,**self.runMode,OUT=f"{self.path}/PSI_V_ANC.out")
 
         if np.linalg.norm(Da2 - Db2) > 1E-5:
             raise Exception("The densities are too different.")
 
-        self.P_ANC_B = Da2 + Db2
-        self.E_ANC_B = E2
+        self.P_ANC_B = res2["Da"] + res2["Db"]
+        self.E_ANC_B = res2["SCF_E"]
 
     def __saveOutputQuantities(self):
         np.savez_compressed(f"{self.path}/output.npz",
@@ -379,14 +375,13 @@ class simpleOptimizer(object):
                             E_EXT = self.E_EXT)
         
 
-    def __init__(self,pathToMolecule,orbitalBasisSet,functional, **kwargs):
+    def __init__(self,pathToMolecule,orbitalBasisSet,functional, runMode=None):
         
         self.nSphere = 590
         self.nRadial = 200
         self.prec = 2
 
-        if "runMode" in kwargs:
-            self.runMode = kwargs["runMode"]
+        self.runMode = runMode
 
         self.pathToMolecule  = pathToMolecule
         self.path= os.path.dirname(pathToMolecule)
