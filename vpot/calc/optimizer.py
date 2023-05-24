@@ -343,12 +343,13 @@ class simpleOptimizer(object):
         if self.runMode == "safe":
             gamma =0.95
             maxiter = 500
+            diis_eps = 5.0
         else:
             gamma =0.80
             maxiter = 150
         
         M = myMolecule(self.pathToMolecule,self.orbitalBasisSet,augmentBasis=True,labelAtoms=False)
-        E1,Da1,Db1 = DFTGroundState(M,"PBE",GAMMA=gamma,MAXITER=maxiter,OUT=f"{self.path}/PSI_V_EXT.out")
+        E1,Da1,Db1 = DFTGroundState(M,"PBE",GAMMA=gamma,MAXITER=maxiter,DIIS_EPS=diis_eps,OUT=f"{self.path}/PSI_V_EXT.out")
 
 
         if np.linalg.norm(Da1 - Db1) > 1E-5:
@@ -361,7 +362,7 @@ class simpleOptimizer(object):
         Now get the one with the Basis set expansion
         """
 
-        E2,Da2,Db2 = DFTGroundState(M,"PBE",AOPOT=self.V_ANC_B,GAMMA=gamma,MAXITER=maxiter,OUT=f"{self.path}/PSI_V_ANC.out")
+        E2,Da2,Db2 = DFTGroundState(M,"PBE",AOPOT=self.V_ANC_B,GAMMA=gamma,MAXITER=maxiter,DIIS_EPS=diis_eps,OUT=f"{self.path}/PSI_V_ANC.out")
 
         if np.linalg.norm(Da2 - Db2) > 1E-5:
             raise Exception("The densities are too different.")
