@@ -339,9 +339,17 @@ class simpleOptimizer(object):
         """
         Ok first calculate the densities with exact analytical external potential
         """
+
+        if self.runMode == "safe":
+            gamma =0.95
+            maxiter = 500
+        else:
+            gamma =0.80
+            maxiter = 150
         
         M = myMolecule(self.pathToMolecule,self.orbitalBasisSet,augmentBasis=True,labelAtoms=False)
-        E1,Da1,Db1 = DFTGroundState(M,"PBE",GAMMA=0.8,OUT=f"{self.path}/PSI_V_EXT.out")
+        E1,Da1,Db1 = DFTGroundState(M,"PBE",GAMMA=gamma,MAXITER=maxiter,OUT=f"{self.path}/PSI_V_EXT.out")
+
 
         if np.linalg.norm(Da1 - Db1) > 1E-5:
             raise Exception("The densities are too different.")
@@ -353,7 +361,7 @@ class simpleOptimizer(object):
         Now get the one with the Basis set expansion
         """
 
-        E2,Da2,Db2 = DFTGroundState(M,"PBE",AOPOT=self.V_ANC_B,GAMMA=0.8,OUT=f"{self.path}/PSI_V_ANC.out")
+        E2,Da2,Db2 = DFTGroundState(M,"PBE",AOPOT=self.V_ANC_B,GAMMA=gamma,MAXITER=maxiter,OUT=f"{self.path}/PSI_V_ANC.out")
 
         if np.linalg.norm(Da2 - Db2) > 1E-5:
             raise Exception("The densities are too different.")
@@ -369,11 +377,14 @@ class simpleOptimizer(object):
                             E_EXT = self.E_EXT)
         
 
-    def __init__(self,pathToMolecule,orbitalBasisSet,functional):
+    def __init__(self,pathToMolecule,orbitalBasisSet,functional, **kwargs):
         
         self.nSphere = 590
         self.nRadial = 200
         self.prec = 2
+
+        if "runMode" in kwargs:
+            self.runMode = kwargs["runMode"]
 
         self.pathToMolecule  = pathToMolecule
         self.path= os.path.dirname(pathToMolecule)
