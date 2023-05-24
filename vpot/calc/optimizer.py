@@ -349,7 +349,7 @@ class simpleOptimizer(object):
         res1 = DFTGroundState(M,"PBE",**self.runMode,OUT=f"{self.path}/PSI_V_EXT.out")
 
 
-        if np.linalg.norm(Da1 - Db1) > 1E-5:
+        if np.linalg.norm(res1["Da"] - res1["Db"]) > 1E-5:
             raise Exception("The densities are too different.")
         
         self.P_EXT = res1["Da"] + res1["Db"]
@@ -361,7 +361,7 @@ class simpleOptimizer(object):
 
         res2 = DFTGroundState(M,"PBE",AOPOT=self.V_ANC_B,**self.runMode,OUT=f"{self.path}/PSI_V_ANC.out")
 
-        if np.linalg.norm(Da2 - Db2) > 1E-5:
+        if np.linalg.norm(res2["Da"] - res2["Db"]) > 1E-5:
             raise Exception("The densities are too different.")
 
         self.P_ANC_B = res2["Da"] + res2["Db"]

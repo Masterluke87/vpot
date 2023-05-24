@@ -336,4 +336,6 @@ def DFTGroundState(mol,func,**kwargs):
 
     psi4.core.print_out("\n\nFINAL GS SCF ENERGY: {:12.8f} [Ha] \n\n".format(SCF_E))
 
-    return SCF_E, Da, Db
+    results = {"SCF_E" : SCF_E, "Da":Da,"Db":Db,"Ca" : Ca, "Cb":Cb}
+
+    return results
