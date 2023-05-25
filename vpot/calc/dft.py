@@ -34,6 +34,7 @@ def DFTGroundStateRKS(mol,func,**kwargs):
         "MAXITER"   : 150,
         "BASIS"     : mol.basisString,
         "GAMMA"     : 0.95,
+        "VSHIFT"    : 0.0, #mEh
         "DIIS_LEN"  : 6,
         "DIIS_MODE" : "ADIIS+CDIIS",
         "DIIS_EPS"  : 0.1,
@@ -107,7 +108,7 @@ def DFTGroundStateRKS(mol,func,**kwargs):
         C = kwargs["Cinp"]
         Cocc.np[:]  = C[:, :ndocc]
         D      = Cocc.np @ Cocc.np.T
-        
+    HLgap = (eps[ndocc]-eps[ndocc-1])*1000    
 
     printHeader("Molecule:",2)
     mol.psi4Mol.print_out()
@@ -140,12 +141,14 @@ def DFTGroundStateRKS(mol,func,**kwargs):
     psi4.core.print_out("""{:>10} {:8.2E}
 {:>10} {:8.2E}
 {:>10} {:8.4f}
+{:>10} {:8.4f}
 {:>10} {:8.2E}
 {:>10} {:8d}
 {:>10} {:8d}
 {:>10} {:^11}""".format(
     "E_CONV:",options["E_CONV"],
     "D_CONV:",options["D_CONV"],
+    "VSHIFT:",options["VSHIFT"],
     "DAMP:",options["GAMMA"],
     "DIIS_EPS:",options["DIIS_EPS"],
     "MAXITER:", options["MAXITER"],
@@ -154,7 +157,7 @@ def DFTGroundStateRKS(mol,func,**kwargs):
 
     myTimer = Timer()
 
-    psi4.core.print_out("\n\n{:^4} {:^14} {:^11} {:^11} {:^11} {:^11} {:^6} \n".format("# IT", "Escf", "dEscf","Derror","DIIS-E","MIX","Time"))
+    psi4.core.print_out("\n\n{:^4} {:^14} {:^11} {:^11} {:^11} {:^11} {:^6} {:^6} {:^3} \n".format("# IT", "Escf", "dEscf","Derror","DIIS-E","MIX","HL-Gap","Time","DL"))
     psi4.core.print_out("="*80+"\n")
     diis_counter = 0
 
@@ -182,6 +185,17 @@ def DFTGroundStateRKS(mol,func,**kwargs):
         """
         END BUILD FOCK
         """
+
+
+        if options["VSHIFT"] > 0.0:
+            if HLgap < options["VSHIFT"]:
+                FMO = C.T @ F @ C
+                Cinv = np.linalg.inv(C)
+
+                idxs = range(ndocc,nbf)
+                FMO[idxs,idxs] += (10.0-HLgap)/1000.0
+
+                F = Cinv.T @ FMO @ Cinv
 
         """
         CALC E
@@ -250,17 +264,21 @@ def DFTGroundStateRKS(mol,func,**kwargs):
         DError = np.linalg.norm(DOld-D)
         EError = (SCF_E - Eold)
         DIISError = (np.sum(diis_e**2)**0.5)
+
+
+        HLgap = (eps[ndocc]-eps[ndocc-1])*1000
      
         """
         OUTPUT
         """
         myTimer.addEnd("SCF")
-        psi4.core.print_out(" {:3d} {:14.8f} {:11.3E} {:11.3E} {:11.3E} {:^11} {:6.2f} {:2d} \n".format(SCF_ITER,
+        psi4.core.print_out(" {:3d} {:14.8f} {:11.3E} {:11.3E} {:11.3E} {:^11} {:6.2f} {:6.2f} {:3d} \n".format(SCF_ITER,
              SCF_E,
              EError,
              DError,
              DIISError,
              options["MIXMODE"],
+             HLgap,
              myTimer.getTime("SCF"),
              len(diis.vector)))
                   
@@ -401,7 +419,7 @@ def DFTGroundState(mol,func,**kwargs):
         psi4.core.print_out("Creating CORE guess\n\n")
         Ca,_ = diag_H(H, A)
         Cb = np.copy(Ca)
-        
+
         Cocca.np[:] = Ca[:, :nalpha]
         Coccb.np[:] = Cb[:, :nbeta]
      
