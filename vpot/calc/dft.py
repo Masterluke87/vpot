@@ -7,11 +7,285 @@ Created on Sun Aug 19 01:57:59 2018
 import psi4
 import numpy as np
 from vpot.calc.kshelper import diag_H,ACDIIS,Timer,printHeader
-from vpot.calc.kshelper import MoldenWriter
+from vpot.calc.kshelper import DIIS_helper
 import os.path
 import time
 import logging
 import pdb
+
+
+def DFTGroundStateRKS(mol,func,**kwargs):
+    """
+    Perform restrictred Kohn-Sham
+    """
+
+    if "OUT" in kwargs:
+        psi4.core.set_output_file(kwargs["OUT"])
+    else:
+        psi4.core.set_output_file("stdout")
+    psi4.core.reopen_outfile()
+
+
+    printHeader("Entering Ground State Restricted Kohn-Sham")
+    options = {
+        "PREFIX"    : "VPOT",
+        "E_CONV"    : 1E-8,
+        "D_CONV"    : 1E-6,
+        "MAXITER"   : 150,
+        "BASIS"     : mol.basisString,
+        "GAMMA"     : 0.95,
+        "DIIS_LEN"  : 6,
+        "DIIS_MODE" : "ADIIS+CDIIS",
+        "DIIS_EPS"  : 0.1,
+        "MIXMODE"   : "DAMP",
+        "RESTART"   : False}
+    
+    for i in options.keys():
+        if i in kwargs:
+            options[i] = kwargs[i]
+            
+    printHeader("Options Run:",2)
+    for key,value in options.items():
+        psi4.core.print_out(f"{key:20s} {str(value):20s} \n")
+
+    printHeader("Basis Set:",2)
+    wfn   = psi4.core.Wavefunction.build(mol.psi4Mol,mol.basisSet)
+    aux   = psi4.core.BasisSet.build(mol.psi4Mol, "DF_BASIS_SCF", "", "JKFIT", mol.basisString, puream=1 if wfn.basisset().has_puream() else 0)
+    sup = psi4.driver.dft.build_superfunctional(func, True)[0]
+
+    psi4.core.be_quiet()
+    mints = psi4.core.MintsHelper(mol.basisSet)    
+    sup.allocate()
+
+    psi4.core.reopen_outfile()
+    
+    S = np.asarray(mints.ao_overlap())
+    T = np.asarray(mints.ao_kinetic())
+    
+    H = np.zeros((mints.nbf(),mints.nbf()))
+
+    if "AOPOT" in kwargs:
+        V = kwargs["AOPOT"]
+        psi4.core.print_out("\nChanged AO-potential!\n")
+    else:
+        V = np.asarray(mints.ao_potential())
+    H = T+V
+
+    if wfn.basisset().has_ECP():
+        ECP = mints.ao_ecp()
+        H += ECP
+
+
+    A = mints.ao_overlap()
+    A.power(-0.5,1.e-16)
+    A = np.asarray(A)
+
+
+    Enuc = mol.psi4Mol.nuclear_repulsion_energy()
+    Eold = 0.0
+
+    nbf    = wfn.nso()
+    ndocc  = wfn.nalpha()
+    
+
+    Va = psi4.core.Matrix(nbf,nbf)
+    Cocc = psi4.core.Matrix(nbf, ndocc)
+    
+    Vpot = psi4.core.VBase.build(wfn.basisset(), sup, "RV")
+    Vpot.initialize()
+
+    """
+    Quick Core Guess
+    """
+
+    C,eps = diag_H(H, A)
+    Cocc.np[:]  = C[:, :ndocc]
+    D        = Cocc.np @ Cocc.np.T
+
+    if "Cinp" in kwargs:
+        psi4.core.print_out("Taking Coefficients from kwargs\n\n")
+        C = kwargs["Cinp"]
+        Cocc.np[:]  = C[:, :ndocc]
+        D      = Cocc.np @ Cocc.np.T
+        
+
+    printHeader("Molecule:",2)
+    mol.psi4Mol.print_out()
+    printHeader("XC & JK-Info:",2)
+
+    jk = psi4.core.JK.build(wfn.basisset(),aux=aux,jk_type="MEM_DF")
+    glob_mem = psi4.core.get_memory()/8
+    jk.set_memory(int(glob_mem*0.6))
+    
+    if (sup.is_x_hybrid()):
+        jk.set_do_K(True)
+    if (sup.is_x_lrc()):
+        jk.set_omega(sup.x_omega())
+        jk.set_do_wK(True)
+    jk.initialize()
+    jk.C_left_add(Cocc)
+
+    D_m = psi4.core.Matrix(nbf,nbf)
+    
+    sup.print_out()
+    psi4.core.print_out("\n\n")
+    mol.basisSet.print_out()
+
+    jk.print_header()
+
+    diis = DIIS_helper(max_vec=options["DIIS_LEN"])
+    diis_e = 1000.0
+
+    printHeader("Starting SCF:",2)    
+    psi4.core.print_out("""{:>10} {:8.2E}
+{:>10} {:8.2E}
+{:>10} {:8.4f}
+{:>10} {:8.2E}
+{:>10} {:8d}
+{:>10} {:8d}
+{:>10} {:^11}""".format(
+    "E_CONV:",options["E_CONV"],
+    "D_CONV:",options["D_CONV"],
+    "DAMP:",options["GAMMA"],
+    "DIIS_EPS:",options["DIIS_EPS"],
+    "MAXITER:", options["MAXITER"],
+    "DIIS_LEN:",options["DIIS_LEN"],
+    "DIIS_MODE:",options["DIIS_MODE"]))
+
+    myTimer = Timer()
+
+    psi4.core.print_out("\n\n{:^4} {:^14} {:^11} {:^11} {:^11} {:^11} {:^6} \n".format("# IT", "Escf", "dEscf","Derror","DIIS-E","MIX","Time"))
+    psi4.core.print_out("="*80+"\n")
+    diis_counter = 0
+
+    for SCF_ITER in range(1, options["MAXITER"] + 1):
+        myTimer.addStart("SCF")     
+        jk.compute()
+
+        """
+        Build Fock
+        """
+        D_m.np[:] = D
+        Vpot.set_D([D_m])
+        Vpot.compute_V([Va])
+
+        J = np.asarray(jk.J()[0])
+
+        if SCF_ITER>1 :
+            FOld = np.copy(F)
+
+        F = H + 2*J + Va
+        if sup.is_x_hybrid():
+            F -= sup.x_alpha()*np.asarray(jk.K()[0])
+        if sup.is_x_lrc(): 
+            F -= sup.x_beta()*np.asarray(jk.wK()[0]) 
+        """
+        END BUILD FOCK
+        """
+
+        """
+        CALC E
+        """
+        one_electron_E  =   np.sum(D * 2*H)
+        coulomb_E       =   np.sum(D * 2*J)
+        exchange_E  = 0.0
+        if sup.is_x_hybrid():
+            exchange_E -=  sup.x_alpha() * np.sum(D * np.asarray(jk.K()[0]))
+        if sup.is_x_lrc():
+            exchange_E -=  sup.x_beta() * np.sum(D * np.asarray(jk.wK()[0]))
+
+
+        XC_E = Vpot.quadrature_values()["FUNCTIONAL"]
+
+
+        SCF_E = 0.0
+        SCF_E += Enuc
+        SCF_E += one_electron_E
+        SCF_E += coulomb_E
+        SCF_E += exchange_E
+        SCF_E += XC_E
+        """
+        END CALCE
+        """
+
+        """
+        DIIS/MIXING
+        """
+        diis_e = np.ravel(A.T@(F@D@S - S@D@F)@A)
+        diis.add(F,diis_e)
+
+
+        if ("DIIS" in options["MIXMODE"]) and (SCF_ITER>1):
+            # Extrapolate alpha & beta Fock matrices separately
+            F = diis.extrapolate()
+            diis_counter += 1
+
+            if (diis_counter >= 2*options["DIIS_LEN"]):
+                diis.reset()
+                diis_counter = 0
+                psi4.core.print_out("Resetting DIIS\n")
+
+        elif (options["MIXMODE"] == "DAMP") and (SCF_ITER>1):
+            #...but use damping to obtain the new Fock matrices
+            F = (1-options["GAMMA"]) * np.copy(F) + (options["GAMMA"]) * FOld
+            
+
+        """
+        END DIIS/MIXING
+        """
+
+        """
+        DIAG F-tilde -> get D
+        """
+        DOld = np.copy(D)
+        
+        C,eps = diag_H(F, A)
+        Cocc.np[:]  = C[:, :ndocc]
+        D      = (Cocc.np @ Cocc.np.T)
+
+        """
+        END DIAG F + BUILD D
+        """
+
+        DError = np.linalg.norm(DOld-D)
+        EError = (SCF_E - Eold)
+        DIISError = (np.sum(diis_e**2)**0.5)
+     
+        """
+        OUTPUT
+        """
+        myTimer.addEnd("SCF")
+        psi4.core.print_out(" {:3d} {:14.8f} {:11.3E} {:11.3E} {:11.3E} {:^11} {:6.2f} {:2d} \n".format(SCF_ITER,
+             SCF_E,
+             EError,
+             DError,
+             DIISError,
+             options["MIXMODE"],
+             myTimer.getTime("SCF"),
+             len(diis.vector)))
+                  
+        psi4.core.flush_outfile()
+        if (abs(DIISError) < options["DIIS_EPS"]):
+            options["MIXMODE"] = options["DIIS_MODE"]
+        else:
+            options["MIXMODE"] = "DAMP"        
+        
+        if (abs(EError) < options["E_CONV"]) and (abs(DError)<options["D_CONV"]):
+            break
+
+        Eold = SCF_E
+
+        if SCF_ITER == options["MAXITER"]:
+            raise Exception("Maximum number of SCF cycles exceeded.")
+
+    psi4.core.print_out("\n\nFINAL GS SCF ENERGY: {:12.8f} [Ha] \n\n".format(SCF_E))
+
+    results = {"SCF_E" : SCF_E, "D":D,"C" : C}
+
+    return results
+
+
+
 
 def DFTGroundState(mol,func,**kwargs):
     """
@@ -20,6 +294,9 @@ def DFTGroundState(mol,func,**kwargs):
 
     if "OUT" in kwargs:
         psi4.core.set_output_file(kwargs["OUT"])
+    else:
+        psi4.core.set_output_file("stdout")
+    psi4.core.reopen_outfile()
 
     printHeader("Entering Ground State Kohn-Sham")
 
@@ -39,6 +316,7 @@ def DFTGroundState(mol,func,**kwargs):
     for i in options.keys():
         if i in kwargs:
             options[i] = kwargs[i]
+
     printHeader("Options Run:",2)
     for key,value in options.items():
         psi4.core.print_out(f"{key:20s} {str(value):20s} \n")
@@ -108,11 +386,30 @@ def DFTGroundState(mol,func,**kwargs):
         Da     = Ca[:, :nalpha] @ Ca[:, :nalpha].T
         Coccb.np[:]  = Cb[:, :nbeta]
         Db     = Cb[:, :nbeta] @ Cb[:, :nbeta].T
+    elif "Cinp" in kwargs:
+        psi4.core.print_out("Taking Coefficients from kwargs\n\n")
+        Ca = kwargs["Cinp"][0]
+        Cb = kwargs["Cinp"][1]
+        Cocca.np[:]  = Ca[:, :nalpha]
+        Da     = Ca[:, :nalpha] @ Ca[:, :nalpha].T
+        Coccb.np[:]  = Cb[:, :nbeta]
+        Db     = Cb[:, :nbeta] @ Cb[:, :nbeta].T
     else:
         """
         SADNO guess, heavily inspired by the psi4 implementation
         """
-        psi4.core.print_out("Creating SADNO guess\n\n")
+        psi4.core.print_out("Creating CORE guess\n\n")
+        Ca,_ = diag_H(H, A)
+        Cb = np.copy(Ca)
+        
+        Cocca.np[:] = Ca[:, :nalpha]
+        Coccb.np[:] = Cb[:, :nbeta]
+     
+        #This is the guess!
+        Da  = Cocca.np @ Cocca.np.T
+        Db  = Coccb.np @ Coccb.np.T
+
+        """
         sad_basis_list = psi4.core.BasisSet.build(mol.psi4Mol, "ORBITAL",
                 options["BASIS"],puream=True,return_atomlist=True)
         sad_fitting_list = psi4.core.BasisSet.build(mol.psi4Mol,"DF_BASIS_SAD",
@@ -136,6 +433,9 @@ def DFTGroundState(mol,func,**kwargs):
         #This is the guess!
         Da  = Cocca.np @ Cocca.np.T
         Db  = Coccb.np @ Coccb.np.T
+        """
+
+    
 
     """
     end read
@@ -162,6 +462,7 @@ def DFTGroundState(mol,func,**kwargs):
     
     sup.print_out()
     psi4.core.print_out("\n\n")
+    mol.basisSet.print_out()
     jk.print_header()
         
     diis = ACDIIS(max_vec=options["DIIS_LEN"],diismode=options["DIIS_MODE"])
@@ -225,7 +526,7 @@ def DFTGroundState(mol,func,**kwargs):
         CALC E
         """
         one_electron_E  = np.sum(Da * H)
-        one_electron_E += np.sum(Da * H)
+        one_electron_E += np.sum(Db * H)
         coulomb_E       = np.sum(Da * (Ja+Jb))
         coulomb_E      += np.sum(Db * (Ja+Jb))
 

@@ -1,7 +1,7 @@
 from vpot.calc import myMolecule
 from vpot.calc.grids import sphericalGrid, blockGrid, pointGrid,sphericalAtomicGrid,blockAtomicGrid,sphericalIndexGrid
 from vpot.calc.potential import vpot,vBpot, vpotANC
-from vpot.calc import DFTGroundState
+from vpot.calc.dft import DFTGroundState, DFTGroundStateRKS
 from matplotlib import pyplot as plt
 import numpy as np
 import os
@@ -346,27 +346,18 @@ class simpleOptimizer(object):
                           "MAXITER" : 150}
                 
         M = myMolecule(self.pathToMolecule,self.orbitalBasisSet,augmentBasis=True,labelAtoms=False)
-        res1 = DFTGroundState(M,"PBE",**self.runMode,OUT=f"{self.path}/PSI_V_EXT.out")
+        res1 = DFTGroundStateRKS(M,"PBE",**self.runMode,OUT=f"{self.path}/PSI_V_EXT.out")
 
-
-        if np.linalg.norm(res1["Da"] - res1["Db"]) > 1E-5:
-            D = np.linalg.norm(res1["Da"]-res1["Db"])
-            raise Exception(f"The densities are too different. Error: {D}")
-        
-        self.P_EXT = res1["Da"] + res1["Db"]
+        self.P_EXT = 2*res1["D"]
         self.E_EXT = res1["SCF_E"]
 
         """
         Now get the one with the Basis set expansion
         """
 
-        res2 = DFTGroundState(M,"PBE",AOPOT=self.V_ANC_B,**self.runMode,OUT=f"{self.path}/PSI_V_ANC.out")
+        res2 = DFTGroundStateRKS(M,"PBE",AOPOT=self.V_ANC_B,**self.runMode,OUT=f"{self.path}/PSI_V_ANC.out")
 
-        if np.linalg.norm(res2["Da"] - res2["Db"]) > 1E-5:
-            D = np.linalg.norm(res2["Da"]-res2["Db"])
-            raise Exception(f"The densities are too different. Error: {D}")
-
-        self.P_ANC_B = res2["Da"] + res2["Db"]
+        self.P_ANC_B = 2*res2["D"]
         self.E_ANC_B = res2["SCF_E"]
 
     def __saveOutputQuantities(self):
