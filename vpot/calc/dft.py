@@ -6,7 +6,7 @@ Created on Sun Aug 19 01:57:59 2018
 """
 import psi4
 import numpy as np
-from vpot.calc.kshelper import diag_H,ACDIIS,Timer,printHeader
+from vpot.calc.kshelper import diag_H,ACDIIS,Timer,printHeader,ACDIISRKS
 from vpot.calc.kshelper import DIIS_helper
 import os.path
 import time
@@ -134,7 +134,7 @@ def DFTGroundStateRKS(mol,func,**kwargs):
 
     jk.print_header()
 
-    diis = DIIS_helper(max_vec=options["DIIS_LEN"])
+    diis = ACDIISRKS(max_vec=options["DIIS_LEN"],diismode=options["DIIS_MODE"])
     diis_e = 1000.0
 
     printHeader("Starting SCF:",2)    
@@ -226,12 +226,12 @@ def DFTGroundStateRKS(mol,func,**kwargs):
         DIIS/MIXING
         """
         diis_e = np.ravel(A.T@(F@D@S - S@D@F)@A)
-        diis.add(F,diis_e)
+        diis.add(F,D,diis_e)
 
 
         if ("DIIS" in options["MIXMODE"]) and (SCF_ITER>1):
             # Extrapolate alpha & beta Fock matrices separately
-            F = diis.extrapolate()
+            F = diis.extrapolate(DIISError)
             diis_counter += 1
 
             if (diis_counter >= 2*options["DIIS_LEN"]):
@@ -280,7 +280,7 @@ def DFTGroundStateRKS(mol,func,**kwargs):
              options["MIXMODE"],
              HLgap,
              myTimer.getTime("SCF"),
-             len(diis.vector)))
+             len(diis.F)))
                   
         psi4.core.flush_outfile()
         if (abs(DIISError) < options["DIIS_EPS"]):
