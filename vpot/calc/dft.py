@@ -294,6 +294,7 @@ def DFTGroundStateRKS(mol,func,**kwargs):
         Eold = SCF_E
 
         if SCF_ITER == options["MAXITER"]:
+            psi4.core.print_out("\n\nMaximum number of SCF cycles exceeded.")
             raise Exception("Maximum number of SCF cycles exceeded.")
 
     psi4.core.print_out("\n\nFINAL GS SCF ENERGY: {:12.8f} [Ha] \n\n".format(SCF_E))
@@ -645,12 +646,7 @@ def DFTGroundState(mol,func,**kwargs):
         Eold = SCF_E
 
         if SCF_ITER == options["MAXITER"]:
-            psi4.core.clean()
-            occa = np.zeros(nbf,dtype=np.float)
-            occb = np.zeros(nbf,dtype=np.float)
-            occa[:nalpha] = 1.0
-            occb[:nbeta]  = 1.0
-            np.savez(options["PREFIX"]+'_gsorbs',Ca=Ca,Cb=Cb,occa=occa,occb=occb,epsa=epsa,epsb=epsb)
+            psi4.core.print_out("\n\nMaximum number of SCF cycles exceeded.")
             raise Exception("Maximum number of SCF cycles exceeded.")
 
     psi4.core.print_out("\n\nFINAL GS SCF ENERGY: {:12.8f} [Ha] \n\n".format(SCF_E))
