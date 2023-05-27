@@ -346,7 +346,7 @@ class simpleOptimizer(object):
                           "MAXITER" : 150}
                 
         M = myMolecule(self.pathToMolecule,self.orbitalBasisSet,augmentBasis=True,labelAtoms=False)
-        res1 = DFTGroundStateRKS(M,"PBE",**self.runMode,OUT=f"{self.path}/PSI_V_EXT.out")
+        res1 = DFTGroundStateRKS(M,self.functional,**self.runMode,OUT=f"{self.path}/PSI_V_EXT.out")
 
         self.P_EXT = 2*res1["D"]
         self.E_EXT = res1["SCF_E"]
@@ -355,7 +355,7 @@ class simpleOptimizer(object):
         Now get the one with the Basis set expansion
         """
 
-        res2 = DFTGroundStateRKS(M,"PBE",AOPOT=self.V_ANC_B,**self.runMode,OUT=f"{self.path}/PSI_V_ANC.out")
+        res2 = DFTGroundStateRKS(M,self.functional,AOPOT=self.V_ANC_B,**self.runMode,OUT=f"{self.path}/PSI_V_ANC.out")
 
         self.P_ANC_B = 2*res2["D"]
         self.E_ANC_B = res2["SCF_E"]
