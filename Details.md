@@ -33,7 +33,7 @@ The non-diagonal elements $\mu \nu$ are overlap integrals:
 
 - ``I['V_ANC_B']``: External potential matrix used for the DFT calculation, calculated from the basis set expanded potential:
 ```math
-   \underline{\underline{V}}^{ANC} = \langle \phi_\mu\mid \sum^{K}_{\sigma} C^{v,ANC}_{\sigma\sigma} \phi_\sigma \mid \phi_\nu \rangle
+   {V}_{\mu \nu}^{ANC} = \langle \phi_\mu\mid \sum^{K}_{\sigma} C^{v,ANC}_{\sigma\sigma} \phi_\sigma \mid \phi_\nu \rangle
 ```
 - ``I['V_EXT']``: External potential matrix, calculated from the exact potential.
 ```math
@@ -50,8 +50,10 @@ import numpy as np
 O = np.load("output.npz",allow_pickle=True)
 ```
 The file contains the following fields:
-- ``I['Fa']``: KxK converged Fock-matrix:
-```math
-F_{\mu \nu } = \langle \phi_\mu \mid \hat{f} \mid\phi_\nu \rangle
-```
-- ``I['Da']``: KxK Density-matrix.
+- ``O['P_ANC_B']``: KxK matrix holding the density matrix, calculated wit the basis set expanded ANC potential $\underline{\underline{V}}^{ANC}$
+
+- ``O['E_ANC'].item()``: Converged electronic energy calculated with the exact external potential $V^{exact}_{\mu\nu}$.
+
+- ``O['P_EXT']``: KxK matrix holding the density matrix, calculated with the exact external potential $V^{exact}_{\mu\nu}$.
+
+- ``O['E_EXT'].item()``: Converged electronic energy calculated with the exact external potential $V^{exact}_{\mu\nu}$.
