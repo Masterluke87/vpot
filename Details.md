@@ -49,9 +49,9 @@ import numpy as np
 O = np.load("output.npz",allow_pickle=True)
 ```
 The file contains the following fields:
-- ``O['P_ANC_B']``: KxK matrix holding the density matrix, calculated wit the basis set expanded ANC potential $\underline{\underline{V}}^{ANC}$
+- ``O['P_ANC_B']``: KxK matrix holding the density matrix, calculated with the basis set expanded ANC potential $\underline{\underline{V}}^{ANC}$
 
-- ``O['E_ANC'].item()``: Converged electronic energy calculated with the exact external potential $\underline{\underline{V}}^{exact}$.
+- ``O['E_ANC'].item()``: Converged electronic energy calculated with with the basis set expanded ANC potential $\underline{\underline{V}}^{ANC}$.
 
 - ``O['P_EXT']``: KxK matrix holding the density matrix, calculated with the exact external potential $\underline{\underline{V}}^{exact}$.
 
