@@ -1,6 +1,5 @@
 # File description
 
-- The archive qm7.tar.gz contains 7211 folders (from 0 to 7210). 
 - Each folder contains 5 files:
     1. ``*.xyz``: file representing the structure
     2. ``*.png``: Figures of the fitted potential + the total error
@@ -23,7 +22,7 @@ The file contains the following fields (K is the number of basis functions):
 - ``I['C_V_ANC']``: KxK matrix. The K diagonal elements are fitted to represent the external ANC potential:
 
 ```math
-    \sum^{K}_{\mu} C^{v,ANC}_{\mu\mu} \phi_\mu (\underline{r}) \approx V(r) = -\sum_A \dfrac{Z_A}{|R_A -r|}
+    \sum^{K}_{\mu} C^{v,ANC}_{\mu\mu} \phi_\mu (\underline{r}) \approx V(r) = -\sum_A \dfrac{Z_A}{|\underline{R}_A -\underline{r}|}
 ```
 
 The non-diagonal elements $\mu \nu$ are overlap integrals:
@@ -52,8 +51,8 @@ O = np.load("output.npz",allow_pickle=True)
 The file contains the following fields:
 - ``O['P_ANC_B']``: KxK matrix holding the density matrix, calculated wit the basis set expanded ANC potential $\underline{\underline{V}}^{ANC}$
 
-- ``O['E_ANC'].item()``: Converged electronic energy calculated with the exact external potential $V^{exact}_{\mu\nu}$.
+- ``O['E_ANC'].item()``: Converged electronic energy calculated with the exact external potential $\underline{\underline{V}}^{exact}$.
 
-- ``O['P_EXT']``: KxK matrix holding the density matrix, calculated with the exact external potential $V^{exact}_{\mu\nu}$.
+- ``O['P_EXT']``: KxK matrix holding the density matrix, calculated with the exact external potential $\underline{\underline{V}}^{exact}$.
 
-- ``O['E_EXT'].item()``: Converged electronic energy calculated with the exact external potential $V^{exact}_{\mu\nu}$.
+- ``O['E_EXT'].item()``: Converged electronic energy calculated with the exact external potential $\underline{V}^{exact}$.
