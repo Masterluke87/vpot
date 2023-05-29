@@ -23,7 +23,7 @@ The file contains the following fields (K is the number of basis functions):
 - ``I['C_V_ANC']``: KxK matrix. The K diagonal elements are fitted to represent the external ANC potential:
 
 ```math
-    \sum^{K}_{\mu} C^{v,ANC}_{\mu\mu} \phi_\mu (r) \approx V(r) = -\sum_A \dfrac{Z_A}{|R_A -r|}
+    \sum^{K}_{\mu} C^{v,ANC}_{\mu\mu} \phi_\mu (\underline{r}) \approx V(r) = -\sum_A \dfrac{Z_A}{|R_A -r|}
 ```
 
 The non-diagonal elements $\mu \nu$ are overlap integrals:
@@ -33,9 +33,12 @@ The non-diagonal elements $\mu \nu$ are overlap integrals:
 
 - ``I['V_ANC_B']``: External potential matrix used for the DFT calculation, calculated from the basis set expanded potential:
 ```math
-   \underline{\underline{V}}^{ANC} = \langle \phi_mu\mid \sum^{K}_{\sigma} C^{v,ANC}_{\sigma\sigma} \phi_\sigma \mid \phi_nu \rangle
+   \underline{\underline{V}}^{ANC} = \langle \phi_\mu\mid \sum^{K}_{\sigma} C^{v,ANC}_{\sigma\sigma} \phi_\sigma \mid \phi_\nu \rangle
 ```
 - ``I['V_EXT']``: External potential matrix, calculated from the exact potential.
+```math
+ V^{exact}_{\mu\nu} = \langle \phi_\mu \mid -\sum_A \dfrac{Z_A}{|R_A -r|} \mid \phi_\nu \rangle
+```
 - ``I['NEL'].item()``: Number of electrons in the system.
 - ``I['INFO'].item()``: A dictonary which holds more information on the actual calcaultion.
 
