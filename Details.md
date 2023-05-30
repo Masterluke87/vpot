@@ -1,5 +1,7 @@
 # File description
-
+- You should work on two files:
+    1. ``qm7-pbe.tar.gz`` : Structures calculated with  PBE/def2-TZVP, 116 calculations did *not* converge, i.e. there is no output.npz.
+    2. ``qm7-pbe0.tar.gz`` : Structures calculated with PBE0/def2-TZVP, all calculations converged
 - Each folder contains 5 files:
     1. ``*.xyz``: file representing the structure
     2. ``*.png``: Figures of the fitted potential + the total error
