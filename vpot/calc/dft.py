@@ -96,19 +96,46 @@ def DFTGroundStateRKS(mol,func,**kwargs):
     Vpot.initialize()
 
     """
-    Quick Core Guess
+    INITIAL DENSITY OR CINP or CoreGuess
     """
 
-    C,eps = diag_H(H, A)
-    Cocc.np[:]  = C[:, :ndocc]
-    D        = Cocc.np @ Cocc.np.T
+    if "Pinp" in kwargs:
+        psi4.core.print_out("\n\nTaking Density from Input \n\n")
+        Pinit = kwargs["Pinp"]
+        assert Pinit.shape == (nbf,nbf)
+        #From here it is assumed that the density matrix is in the ordinary non-orthogonal basis
+        #One should check if the trace of the Matrix is sufficiently close to the number of electron/2
+        nTrace = np.trace(Pinit)
+        if np.isclose(ndocc,nTrace):
+            psi4.core.print_out("Density seems already in the orthogonal basis \n")
+            Porth = Pinit
+        else:
+            psi4.core.print_out("Transform to orthogonal basis \n")
+            Porth = S@A.T@Pinit@S.T@A
 
-    if "Cinp" in kwargs:
-        psi4.core.print_out("Taking Coefficients from kwargs\n\n")
+        assert np.isclose(ndocc,np.trace(Porth))
+
+        psi4.core.print_out(f"Trace of othogonalized density matrix: {np.trace(Porth)}")
+        U,Sigma,V = np.linalg.svd(Porth)
+        CoccOrth = U[:,:ndocc]
+        Cocc.np[:] = A@CoccOrth
+        D = Cocc.np @ Cocc.np.T
+
+    elif "Cinp" in kwargs:
+        psi4.core.print_out("\n\n Taking Coefficients from kwargs!\n\n")
         C = kwargs["Cinp"]
         Cocc.np[:]  = C[:, :ndocc]
         D      = Cocc.np @ Cocc.np.T
-    HLgap = (eps[ndocc]-eps[ndocc-1])*1000    
+
+    else:
+        psi4.core.print_out("\n\n Doing a core guess!\n\n")
+        C,eps = diag_H(H, A)
+        Cocc.np[:]  = C[:, :ndocc]
+        D        = Cocc.np @ Cocc.np.T
+
+
+
+    HLgap = 1000
 
     printHeader("Molecule:",2)
     mol.psi4Mol.print_out()
