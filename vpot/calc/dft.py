@@ -8,10 +8,26 @@ import psi4
 import numpy as np
 from vpot.calc.kshelper import diag_H,ACDIIS,Timer,printHeader,ACDIISRKS
 from vpot.calc.kshelper import DIIS_helper
+from vpot.calc.mol import myMolecule
 import os.path
 import time
 import logging
 import pdb
+
+def getSADGuess(M):
+    Mtmp = myMolecule(M.xyzFile,M.basisString,augmentBasis=True,labelAtoms=False)
+    a,basisDict = psi4.driver.qcdb.BasisSet.pyconstruct(Mtmp.psi4Mol.to_dict(),'BASIS',Mtmp.orbitalDict["name"],fitrole='ORBITAL',other=None,return_dict=True,return_atomlist=True)
+
+    for i in range(len(basisDict)):
+        basisDict[i]["shell_map"] = [Mtmp.basisDict["shell_map"][i]]
+
+    sad_basis_list = [psi4.core.BasisSet.construct_from_pydict(psi4.core.Molecule.from_dict(basisDict[i]["molecule"]),basisDict[i],-1) for i in range(len(basisDict))]
+    sad_fitting_list = psi4.core.BasisSet.build(M.psi4Mol, "DF_BASIS_SAD", psi4.core.get_option("SCF", "DF_BASIS_SAD"), puream=M.basisSet.has_puream(), return_atomlist=True)
+    SAD = psi4.core.SADGuess.build_SAD(Mtmp.basisSet, sad_basis_list)
+
+    SAD.set_atomic_fit_bases(sad_fitting_list)
+    SAD.compute_guess()
+    return SAD
 
 
 def DFTGroundStateRKS(mol,func,**kwargs):
@@ -34,6 +50,7 @@ def DFTGroundStateRKS(mol,func,**kwargs):
         "MAXITER"   : 150,
         "BASIS"     : mol.basisString,
         "GAMMA"     : 0.95,
+        "GUESS"     : "SAD",
         "VSHIFT"    : 0.0, #mEh
         "DIIS_LEN"  : 6,
         "DIIS_MODE" : "ADIIS+CDIIS",
@@ -115,7 +132,7 @@ def DFTGroundStateRKS(mol,func,**kwargs):
 
         assert np.isclose(ndocc,np.trace(Porth))
 
-        psi4.core.print_out(f"Trace of othogonalized density matrix: {np.trace(Porth)}")
+        psi4.core.print_out(f"Trace of orthogonalized density matrix: {np.trace(Porth)}")
         U,Sigma,V = np.linalg.svd(Porth)
         CoccOrth = U[:,:ndocc]
         Cocc.np[:] = A@CoccOrth
@@ -126,6 +143,29 @@ def DFTGroundStateRKS(mol,func,**kwargs):
         C = kwargs["Cinp"]
         Cocc.np[:]  = C[:, :ndocc]
         D      = Cocc.np @ Cocc.np.T
+
+    elif options["GUESS"] == "SAD":
+        psi4.core.print_out("Doing a SAD guess\n")
+        SAD = getSADGuess(mol)
+        Pinit = SAD.Da()
+        assert Pinit.shape == (nbf,nbf)
+        #From here it is assumed that the density matrix is in the ordinary non-orthogonal basis
+        #One should check if the trace of the Matrix is sufficiently close to the number of electron/2
+        nTrace = np.trace(Pinit)
+        if np.isclose(ndocc,nTrace):
+            psi4.core.print_out("Density seems already in the orthogonal basis \n")
+            Porth = Pinit
+        else:
+            psi4.core.print_out("Transform to orthogonal basis \n")
+            Porth = S@A.T@Pinit@S.T@A
+
+        assert np.isclose(ndocc,np.trace(Porth))
+
+        psi4.core.print_out(f"Trace of orthogonalized density matrix: {np.trace(Porth)}")
+        U,Sigma,V = np.linalg.svd(Porth)
+        CoccOrth = U[:,:ndocc]
+        Cocc.np[:] = A@CoccOrth
+        D = Cocc.np @ Cocc.np.T
 
     else:
         psi4.core.print_out("\n\n Doing a core guess!\n\n")

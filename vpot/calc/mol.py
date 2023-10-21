@@ -101,6 +101,7 @@ class myMolecule(object):
         self.com = self.mass @ self.geom / self.mass.sum()
         self.nElectrons = np.sum(self.elez)
         self.ao_pot = mints.ao_potential().np
+        self.ao_overlap = mints.ao_overlap().np
 
 
         self.psi4Mol  = mol 
