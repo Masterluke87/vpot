@@ -7,8 +7,8 @@
     2. ``*.png``: Figures of the fitted potential + the total error
     3. ``PSI_V_EXT.out``: output of the PSI4 calculation using the exact external potential
     4. ``PSI_V_ANC.out``: output of the PSI4 calculation using the basis set expanded ANC potential
-    5. ``input.npz`` : A numpy archive containing information and input matrices (see below)
-    6. ``output.npz`` : A numpy archive containing output matrices (see below)
+    5. ``input*.npz`` : A numpy archive containing information and input matrices (see below). There are different versions. Try to use the one with the largest number.
+    6. ``output*.npz`` : A numpy archive containing output matrices (see below), There are different version. Take the one with the largest number.
 
 ## Structure of ``input.npz``
 - Load the file with:
@@ -31,6 +31,11 @@ The non-diagonal elements $\mu \nu$ are overlap integrals:
 ```math
     C^{v,ANC}_{\mu \nu} = S_{\mu \nu} = \langle \phi_\mu \mid \phi_\nu \rangle
 ```
+- ``I['C_V_ANC']``: K dimensional vector. Contains the expansion of the ANC potential in the orthogonal basis:
+```math
+\underline{\underline{C}}^{v,ANC,o} = \underline{\underline{X}}^{-1} \cdot \underline{\underline{C}}^{v,ANC}
+```
+with $\underline{\underline{X}}$ beeing the Loewdin Matrix ($\underline{\underline{S}}^{-1/2}$).
 
 - ``I['V_ANC_B']``: External potential matrix used for the DFT calculation, calculated from the basis set expanded potential:
 ```math
