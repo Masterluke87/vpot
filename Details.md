@@ -58,8 +58,12 @@ O = np.load("output.npz",allow_pickle=True)
 The file contains the following fields:
 - ``O['P_ANC_B']``: KxK matrix holding the density matrix, calculated with the basis set expanded ANC potential $\underline{\underline{V}}^{ANC}$
 
-- ``O['E_ANC'].item()``: Converged electronic energy calculated with with the basis set expanded ANC potential $\underline{\underline{V}}^{ANC}$.
+- ``O['P_ANC_B_ORTH']``: KxK matrix holding the density matrix, in the orthonormal basis.Trace of that matrix equals the number of electrons!
+
+- ``O['E_ANC'].item()``: Converged electronic energy calculated with with the basis set expanded ANC potential $\underline{\underline{V}}^{ANC}$. 
 
 - ``O['P_EXT']``: KxK matrix holding the density matrix, calculated with the exact external potential $\underline{\underline{V}}^{exact}$.
+
+- ``O['P_SAD_ORTH']`` KxK matrix holding the SAD guess matrix in the orthonormal basis.
 
 - ``O['E_EXT'].item()``: Converged electronic energy calculated with the exact external potential $\underline{V}^{exact}$.
