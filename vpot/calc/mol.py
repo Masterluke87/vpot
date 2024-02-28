@@ -39,6 +39,7 @@ class myMolecule(object):
 
 
         self.psi4Mol  = mol 
+        self.augmentBasis = augmentBasis
         
         if basisString=="":
             print("Basis string is empty")
@@ -103,6 +104,10 @@ class myMolecule(object):
         self.ao_pot = mints.ao_potential().np
         self.ao_overlap = mints.ao_overlap().np
 
+        A = psi4.core.Matrix.from_array(self.ao_overlap)
+        A.power(-0.5,1e-16)
+        A = np.asarray(A)
+        self.ao_loewdin = A
 
         self.psi4Mol  = mol 
 

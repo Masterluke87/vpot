@@ -14,8 +14,151 @@ import time
 import logging
 import pdb
 
+def calcEnergyWithPerturbedDensity(M, Pinit, fac, perturb=True,func="PBE0",**kwargs):
+    mints = psi4.core.MintsHelper(M.basisSet)
+    wfn   = psi4.core.Wavefunction.build(M.psi4Mol,M.basisSet)
+    aux   = psi4.core.BasisSet.build(M.psi4Mol, "DF_BASIS_SCF", "", "JKFIT", M.basisString, puream=1 if wfn.basisset().has_puream() else 0)
+    
+    S = np.asarray(mints.ao_overlap())
+    T = np.asarray(mints.ao_kinetic())
+
+    if "AOPOT" in kwargs:
+        V = kwargs["AOPOT"]
+        psi4.core.print_out("\nChanged AO-potential!\n")
+    else:
+        V = np.asarray(mints.ao_potential())
+    
+    H = T + V
+    
+    A = mints.ao_overlap()
+    A.power(-0.5, 1.e-16)
+    A = np.asarray(A)
+    
+    nbf    = wfn.nso()
+    ndocc  = wfn.nalpha()
+                
+    Va   = psi4.core.Matrix(nbf,nbf)
+    Cocc = psi4.core.Matrix(nbf, ndocc)
+    
+    sup = psi4.driver.dft.build_superfunctional(f"{func}", True)[0]
+    
+    D_m = psi4.core.Matrix(nbf,nbf)
+    Vpot = psi4.core.VBase.build(wfn.basisset(), sup, "RV")
+    Vpot.initialize()
+    
+    jk = psi4.core.JK.build(wfn.basisset(),aux=aux,jk_type="MEM_DF")
+    glob_mem = psi4.core.get_memory()/8
+    jk.set_memory(int(glob_mem*0.6))
+    if (sup.is_x_hybrid()):
+        jk.set_do_K(True)
+    if (sup.is_x_lrc()):
+        jk.set_omega(sup.x_omega())
+        jk.set_do_wK(True)
+    jk.initialize()
+    
+    
+    
+    noise = np.zeros((nbf,nbf))
+    if perturb:
+        noise[np.triu_indices(nbf)]=(np.random.random(int(nbf*(nbf+1)/2))-0.5)/0.5 
+        noise = (np.tril(noise.T) + np.triu(noise))/fac
+        #trace should be zero
+        noise[np.diag_indices_from(noise)] -= np.trace(noise)/nbf
+
+    
+    nTrace = np.trace(Pinit)
+    if np.isclose(ndocc,nTrace):
+        print("Density seems already in the orthogonal basis \n")
+        Porth = Pinit
+    else:
+        print("Transform to orthogonal basis \n")
+        Porth = S@A.T@Pinit@S.T@A
+    
+    PorthPert = Porth + noise
+    mse = np.square(Porth-PorthPert).mean()
+    print(f"MSE: {mse}")
+                
+   
+    
+    
+    """
+    Obtain a Cocc
+    """
+    
+    print(f"Trace of othogonalized density matrix: {np.trace(PorthPert)}")
+    U,Sigma,V = np.linalg.svd(PorthPert)
+    
+    print(f"Consistency check (-->0) #1: {np.max(U[:,:ndocc]@V[:ndocc] - PorthPert)}")
+    
+    CoccOrth = U[:,:ndocc]
+    Cocc.np[:] = A@CoccOrth
+    
+    """
+    End obtain Cocc
+    """
+    
+    jk.C_left_add(Cocc)
+    jk.compute()
+    
+    """
+    Build Fock
+    """
+    D_m.np[:] = Cocc.np@Cocc.np.T
+    Vpot.set_D([D_m])
+    Vpot.compute_V([Va])
+    
+    J = np.asarray(jk.J()[0])
+
+    F = H + 2*J + Va
+    if sup.is_x_hybrid():
+        F -= sup.x_alpha()*np.asarray(jk.K()[0])
+    if sup.is_x_lrc(): 
+        F -= sup.x_beta()*np.asarray(jk.wK()[0]) 
+        
+    """
+    END BUILD FOCK
+    """
+    
+    """
+    DIAG FOCK
+    """
+
+    C,eps = diag_H(F, A)
+    Cocc.np[:]  = C[:, :ndocc]
+    D_m.np[:]   = (Cocc.np @ Cocc.np.T)
+      
+    Vpot.set_D([D_m])
+    Vpot.compute_V([Va])
+    jk.compute()
+   
+    D =  Cocc.np@Cocc.np.T
+    
+    one_electron_E  =   np.sum(D * 2*H)
+    coulomb_E       =   np.sum(D * 2*np.asarray(jk.J()[0]))
+    exchange_E  = 0.0
+    if sup.is_x_hybrid():
+        exchange_E -=  sup.x_alpha() * np.sum(D * np.asarray(jk.K()[0]))
+    if sup.is_x_lrc():
+        exchange_E -=  sup.x_beta() * np.sum(D * np.asarray(jk.wK()[0]))
+    
+    
+    XC_E = Vpot.quadrature_values()["FUNCTIONAL"]
+    
+    SCF_E = 0.0
+    SCF_E += M.psi4Mol.nuclear_repulsion_energy()
+    SCF_E += one_electron_E
+    SCF_E += coulomb_E
+    SCF_E += exchange_E
+    SCF_E += XC_E
+    return {"E" : SCF_E,
+            "mse": mse,
+            "fac" : fac,
+           }
+
+
+
 def getSADGuess(M):
-    Mtmp = myMolecule(M.xyzFile,M.basisString,augmentBasis=True,labelAtoms=False)
+    Mtmp = myMolecule(M.xyzFile,M.basisString,augmentBasis=M.augmentBasis,labelAtoms=False)
     a,basisDict = psi4.driver.qcdb.BasisSet.pyconstruct(Mtmp.psi4Mol.to_dict(),'BASIS',Mtmp.orbitalDict["name"],fitrole='ORBITAL',other=None,return_dict=True,return_atomlist=True)
 
     for i in range(len(basisDict)):
@@ -362,7 +505,8 @@ def DFTGroundStateRKS(mol,func,**kwargs):
 
         if SCF_ITER == options["MAXITER"]:
             psi4.core.print_out("\n\nMaximum number of SCF cycles exceeded.")
-            raise Exception("Maximum number of SCF cycles exceeded.")
+            results = {"SCF_E" : SCF_E, "D":D,"C":C,"S":S,"X":A}
+            return results
 
     psi4.core.print_out("\n\nFINAL GS SCF ENERGY: {:12.8f} [Ha] \n\n".format(SCF_E))
 
