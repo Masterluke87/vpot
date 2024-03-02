@@ -403,7 +403,7 @@ def DFTGroundStateRKS(mol,func,**kwargs):
                 Cinv = np.linalg.inv(C)
 
                 idxs = range(ndocc,nbf)
-                FMO[idxs,idxs] += (10.0-HLgap)/1000.0
+                FMO[idxs,idxs] += options["VSHIFT"]
 
                 F = Cinv.T @ FMO @ Cinv
 
