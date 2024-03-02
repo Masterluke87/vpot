@@ -401,10 +401,9 @@ def DFTGroundStateRKS(mol,func,**kwargs):
             if HLgap < options["VSHIFT"]:
                 FMO = C.T @ F @ C
                 Cinv = np.linalg.inv(C)
-
                 idxs = range(ndocc,nbf)
-                FMO[idxs,idxs] += options["VSHIFT"]
 
+                FMO[idxs,idxs] += (options["VSHIFT"] / 1000) 
                 F = Cinv.T @ FMO @ Cinv
 
         """
