@@ -170,7 +170,7 @@ def calcEnergyWithPerturbedDensity(M, Pinit, fac, diagFock=True, perturb=False,f
             "D" : D,
            }
 
-def constructSADGuess(M,func="PBE0"):
+def constructSADGuess(M,func="PBE0",returnEnergies=False):
     """
     Constructs a SAD guess and used the natural orbitals to 
     create an idempotentent matrix. This should give a variational initial guess.
@@ -180,6 +180,7 @@ def constructSADGuess(M,func="PBE0"):
     
     uniqueElem = list(set(M.elem))
     atomicDensities = {}
+    atomicEnergies = {}
     psi4.core.be_quiet()
     for atom in uniqueElem:
         with open("tmp.xyz","w") as f:
@@ -188,15 +189,22 @@ def constructSADGuess(M,func="PBE0"):
         A = myMolecule("tmp.xyz",M.basisString,M.augmentBasis)    
         res = DFTGroundState(A,func,GAMMA=0.25,OCCA=atomicOccupations[atom],OCCB=atomicOccupations[atom],OUT="/dev/null")
         atomicDensities[atom] = (res['Da']+res['Db'])/2.0
+        atomicEnergies[atom] = res['SCF_E']
 
     DGuess = block_diag(*[atomicDensities[x] for x in M.elem])
+    EAtoms = [atomicEnergies[x] for x in M.elem]
 
     DguessOrth = M.ao_overlap@M.ao_loewdin.T@DGuess@M.ao_loewdin@M.ao_overlap.T
     vals,vecs = np.linalg.eigh(-1.0*DguessOrth)
 
     vecsOcc = vecs[:,:int(M.nElectrons/2.0)]
     DNoOrth = vecsOcc @ vecsOcc.T
-    return DNoOrth
+    if returnEnergies:
+        EAtoms = [atomicEnergies[x] for x in M.elem]
+        ESad   =  calcEnergyWithPerturbedDensity(M, DNoOrth, 0.0, diagFock=False, perturb=False,func=func)
+        return (DNoOrth,EAtoms,ESad["E"])
+    else:
+        return DNoOrth
 
 def getSADGuess(M):
     Mtmp = myMolecule(M.xyzFile,M.basisString,augmentBasis=M.augmentBasis,labelAtoms=False)
@@ -330,8 +338,7 @@ def DFTGroundStateRKS(mol,func,**kwargs):
 
     elif options["GUESS"] == "SAD":
         psi4.core.print_out("Doing a SAD guess\n")
-        SAD = getSADGuess(mol)
-        Pinit = SAD.Da()
+        Pinit = constructSADGuess(mol)
         assert Pinit.shape == (nbf,nbf)
         #From here it is assumed that the density matrix is in the ordinary non-orthogonal basis
         #One should check if the trace of the Matrix is sufficiently close to the number of electron/2

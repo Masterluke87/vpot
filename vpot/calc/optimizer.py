@@ -1,7 +1,7 @@
 from vpot.calc import myMolecule
 from vpot.calc.grids import sphericalGrid, blockGrid, pointGrid,sphericalAtomicGrid,blockAtomicGrid,sphericalIndexGrid
 from vpot.calc.potential import vpot,vBpot, vpotANC
-from vpot.calc.dft import DFTGroundState, DFTGroundStateRKS, getSADGuess
+from vpot.calc.dft import DFTGroundStateRKS, getSADGuess, constructSADGuess
 from matplotlib import pyplot as plt
 import numpy as np
 import os
@@ -430,6 +430,91 @@ class simpleOptimizer(object):
         self.__saveOutputQuantities()
         self.__plotPMatrix()
         
+class conventionalOptimizer():
+    def __init__(self,pathToMolecule,orbitalBasisSet,functional, runMode=None):
+        self.runMode = runMode
+
+        self.pathToMolecule  = pathToMolecule
+        self.path= os.path.dirname(pathToMolecule)
+        
+        self.orbitalBasisSet = orbitalBasisSet
+        self.functional = functional
+      
+
+        #kinetic energy and potential energy
+
+        self.V_EXT = None
+        self.T_KIN = None
+        self.HCORE = None
+    
+        self.P_EXT_ORTH = None
+        self.P_SAD_ORTH = None
+        self.P_CORR_ORTH = None
+
+        self.E_DFT = None
+        self.E_ATOMS = None
+        self.E_SAD = None
+
+        self.__getVpotMatrices()
+        self.__getDensities()
+        self.__saveInputQuantities()
+        self.__saveOutputQuantities()
+
+    def __getDensities(self):
+        """
+        Ok first calculate the densities with exact analytical external potential
+        """
+
+
+        if not self.runMode:
+            self.runMode={"GAMMA" : 0.75,
+                          "MAXITER" : 150}
+                
+        M   = myMolecule(self.pathToMolecule,self.orbitalBasisSet,augmentBasis=False,labelAtoms=False)
+        res = DFTGroundStateRKS(M,self.functional,**self.runMode,OUT=f"{self.path}/PSI_V_EXT.out")
+
+        S = M.ao_overlap
+        A = M.ao_loewdin
+
+        self.E_DFT = res["SCF_E"]
+
+        self.P_SAD_ORTH,self.E_ATOMS,self.E_SAD  = constructSADGuess(M,returnEnergies=True) #NOSAD in orthogonal basis
+        self.P_EXT_ORTH  = S@A.T @ res["D"] @A @S.T
+        self.P_CORR_ORTH = self.P_EXT_ORTH - self.P_SAD_ORTH 
+
+    def __getVpotMatrices(self):
+
+        M = myMolecule(self.pathToMolecule,self.orbitalBasisSet,augmentBasis=False,labelAtoms=False)
+        
+
+        self.V_EXT = M.ao_loewdin.T @M.ao_pot @ M.ao_loewdin
+        self.T_KIN = M.ao_loewdin.T @M.ao_kinetic@ M.ao_loewdin
+        self.HCORE = self.T_KIN + self.V_EXT
+
+    def __saveOutputQuantities(self):
+        np.savez_compressed(f"{self.path}/output.npz",
+                            E_DFT = self.E_DFT,
+                            P_EXT_ORTH= self.P_EXT_ORTH,
+                            P_CORR_ORTH= self.P_CORR_ORTH)
+    
+    def __saveInputQuantities(self):
+        M = myMolecule(self.pathToMolecule,self.orbitalBasisSet,augmentBasis=False,labelAtoms=False)
+
+        info = {"Path" : self.pathToMolecule,
+                "BasisSet" : self.orbitalBasisSet,
+                "Functional" : self.functional}  
+
+
+        np.savez_compressed(f"{self.path}/input.npz",
+                V_EXT=self.V_EXT,
+                T_KIN=self.T_KIN,
+                HCORE=self.HCORE,
+                P_SAD_ORTH = self.P_SAD_ORTH,
+                E_ATOMS = self.E_ATOMS,
+                E_SAD = self.E_SAD,
+                NEL = M.nElectrons,
+                INFO=info)    
+    
 
 class softOptimizer(object):
     def __init__(self,pathToMolecule,orbitalBasisSet,functional, runMode=None):

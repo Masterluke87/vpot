@@ -103,6 +103,7 @@ class myMolecule(object):
         self.nElectrons = np.sum(self.elez)
         self.ao_pot = mints.ao_potential().np
         self.ao_overlap = mints.ao_overlap().np
+        self.ao_kinetic = mints.ao_kinetic().np
 
         A = psi4.core.Matrix.from_array(self.ao_overlap)
         A.power(-0.5,1e-16)
