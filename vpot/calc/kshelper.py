@@ -13,6 +13,16 @@ import psi4
 
 
 
+atomicOccupations = {
+    "H" : [0.5],
+    "C" : [1.0,0.5,0.5,0.5,0.5], # 6 total electrons
+    "N" : [1.0,2.5/4.,2.5/4.,2.5/4.,2.5/4.], # 7 electrons
+    "O" : [1.0,3./4,3./4,3./4,3./4], #8 electrons
+    "S" : [1.0,1.0,1.0,1.0,1.0,3./4.,3./4.,3./4.,3./4.], #16 els
+    "CL": [1.0,1.0,1.0,1.0,1.0,3.5/4.,3.5/4.,3.5/4.,3.5/4.], #17elecs
+}
+
+
 def MoldenWriter(filename, wavefunction, CaIn, CbIn, eps_a, eps_b,occa,occb):
     basisset = wavefunction.basisset()
     mol = wavefunction.molecule()

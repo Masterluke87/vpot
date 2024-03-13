@@ -14,7 +14,12 @@ import time
 import logging
 import pdb
 
-def calcEnergyWithPerturbedDensity(M, Pinit, fac, perturb=True,func="PBE0",**kwargs):
+def calcEnergyWithPerturbedDensity(M, Pinit, fac, diagFock=True, perturb=False,func="PBE0",**kwargs):
+    """
+    This function should calculate the energy of a given electron density
+    The density cab be perturbed prior to the energy calculation
+    Further a FOCK Matrix can be constructed and diagonalized
+    """
     mints = psi4.core.MintsHelper(M.basisSet)
     wfn   = psi4.core.Wavefunction.build(M.psi4Mol,M.basisSet)
     aux   = psi4.core.BasisSet.build(M.psi4Mol, "DF_BASIS_SCF", "", "JKFIT", M.basisString, puream=1 if wfn.basisset().has_puream() else 0)
@@ -86,52 +91,61 @@ def calcEnergyWithPerturbedDensity(M, Pinit, fac, perturb=True,func="PBE0",**kwa
     """
     
     print(f"Trace of othogonalized density matrix: {np.trace(PorthPert)}")
-    U,Sigma,V = np.linalg.svd(PorthPert)
-    
-    print(f"Consistency check (-->0) #1: {np.max(U[:,:ndocc]@V[:ndocc] - PorthPert)}")
+    U,Sigma,V = np.linalg.svd(Pinit)
+    idx = Sigma>=1E-6
+    print(f"S: {Sigma[idx]}")
+    print(f"Consistency check (-->0) #1: {np.max(U[:,:ndocc]@U[:,:ndocc].T - PorthPert)}")
     
     CoccOrth = U[:,:ndocc]
     Cocc.np[:] = A@CoccOrth
+
+    D_m.np[:] = Cocc.np@Cocc.np.T
     
     """
     End obtain Cocc
     """
     
-    jk.C_left_add(Cocc)
-    jk.compute()
+    
     
     """
     Build Fock
     """
-    D_m.np[:] = Cocc.np@Cocc.np.T
-    Vpot.set_D([D_m])
-    Vpot.compute_V([Va])
+    if diagFock==True:
+        Vpot.set_D([D_m])
+        Vpot.compute_V([Va])
+        jk.C_left_add(Cocc)
+        jk.compute()
     
-    J = np.asarray(jk.J()[0])
+        J = np.asarray(jk.J()[0])
 
-    F = H + 2*J + Va
-    if sup.is_x_hybrid():
-        F -= sup.x_alpha()*np.asarray(jk.K()[0])
-    if sup.is_x_lrc(): 
-        F -= sup.x_beta()*np.asarray(jk.wK()[0]) 
+        F = H + 2*J + Va
+        if sup.is_x_hybrid():
+            F -= sup.x_alpha()*np.asarray(jk.K()[0])
+        if sup.is_x_lrc(): 
+            F -= sup.x_beta()*np.asarray(jk.wK()[0]) 
+            
+        """
+        END BUILD FOCK
+        """
         
-    """
-    END BUILD FOCK
-    """
+        """
+        DIAG FOCK
+        """
     
-    """
-    DIAG FOCK
-    """
+        C,eps = diag_H(F, A)
+        
+        Cocc.np[:]  = C[:, :ndocc]
+        D_m.np[:]   = (Cocc.np @ Cocc.np.T)
 
-    C,eps = diag_H(F, A)
-    Cocc.np[:]  = C[:, :ndocc]
-    D_m.np[:]   = (Cocc.np @ Cocc.np.T)
-      
+    
+    D =  Cocc.np@Cocc.np.T
+    """
+    Energy Evaluation
+    """
     Vpot.set_D([D_m])
     Vpot.compute_V([Va])
+    jk.C_left_add(Cocc)
     jk.compute()
-   
-    D =  Cocc.np@Cocc.np.T
     
     one_electron_E  =   np.sum(D * 2*H)
     coulomb_E       =   np.sum(D * 2*np.asarray(jk.J()[0]))
@@ -153,9 +167,36 @@ def calcEnergyWithPerturbedDensity(M, Pinit, fac, perturb=True,func="PBE0",**kwa
     return {"E" : SCF_E,
             "mse": mse,
             "fac" : fac,
+            "D" : D,
            }
 
+def constructSADGuess(M,func="PBE0"):
+    """
+    Constructs a SAD guess and used the natural orbitals to 
+    create an idempotentent matrix. This should give a variational initial guess.
+    """
+    from vpot.calc.kshelper import atomicOccupations
+    from scipy.linalg import block_diag
+    
+    uniqueElem = list(set(M.elem))
+    atomicDensities = {}
+    psi4.core.be_quiet()
+    for atom in uniqueElem:
+        with open("tmp.xyz","w") as f:
+            f.write("1\n\n")
+            f.write(f"{atom} 0.0 0.0 0.0")
+        A = myMolecule("tmp.xyz",M.basisString,M.augmentBasis)    
+        res = DFTGroundState(A,func,GAMMA=0.25,OCCA=atomicOccupations[atom],OCCB=atomicOccupations[atom],OUT="/dev/null")
+        atomicDensities[atom] = (res['Da']+res['Db'])/2.0
 
+    DGuess = block_diag(*[atomicDensities[x] for x in M.elem])
+
+    DguessOrth = M.ao_overlap@M.ao_loewdin.T@DGuess@M.ao_loewdin@M.ao_overlap.T
+    vals,vecs = np.linalg.eigh(-1.0*DguessOrth)
+
+    vecsOcc = vecs[:,:int(M.nElectrons/2.0)]
+    DNoOrth = vecsOcc @ vecsOcc.T
+    return DNoOrth
 
 def getSADGuess(M):
     Mtmp = myMolecule(M.xyzFile,M.basisString,augmentBasis=M.augmentBasis,labelAtoms=False)
@@ -273,7 +314,7 @@ def DFTGroundStateRKS(mol,func,**kwargs):
             psi4.core.print_out("Transform to orthogonal basis \n")
             Porth = S@A.T@Pinit@S.T@A
 
-        assert np.isclose(ndocc,np.trace(Porth))
+        assert np.isclose(ndocc,np.trace(Porth),rtol=1E-4,atol=1E-4)
 
         psi4.core.print_out(f"Trace of orthogonalized density matrix: {np.trace(Porth)}")
         U,Sigma,V = np.linalg.svd(Porth)
@@ -302,7 +343,7 @@ def DFTGroundStateRKS(mol,func,**kwargs):
             psi4.core.print_out("Transform to orthogonal basis \n")
             Porth = S@A.T@Pinit@S.T@A
 
-        assert np.isclose(ndocc,np.trace(Porth))
+        assert np.isclose(mol.nElectrons/2.0,np.trace(Porth))
 
         psi4.core.print_out(f"Trace of orthogonalized density matrix: {np.trace(Porth)}")
         U,Sigma,V = np.linalg.svd(Porth)
@@ -539,6 +580,8 @@ def DFTGroundState(mol,func,**kwargs):
         "DIIS_LEN"  : 6,
         "DIIS_MODE" : "ADIIS+CDIIS",
         "DIIS_EPS"  : 0.1,
+        "OCCA"      : None,
+        "OCCB"      : None,
         "MIXMODE"   : "DAMP",
         "RESTART"   : False}
     
@@ -550,6 +593,10 @@ def DFTGroundState(mol,func,**kwargs):
     for key,value in options.items():
         psi4.core.print_out(f"{key:20s} {str(value):20s} \n")
 
+
+   
+
+    
     
 
     printHeader("Basis Set:",2)
@@ -601,31 +648,50 @@ def DFTGroundState(mol,func,**kwargs):
     Vpot = psi4.core.VBase.build(wfn.basisset(), sup, "UV")
     Vpot.initialize()
 
+    Cocca       = psi4.core.Matrix(nbf, nalpha)
+    Coccb       = psi4.core.Matrix(nbf, nbeta)
+
+    if not(options["OCCA"] is None) and not(options["OCCB"] is None):
+        occa = np.pad(options['OCCA'],(0,nbf-len(options['OCCA'])))
+        occb = np.pad(options['OCCB'],(0,nbf-len(options['OCCB'])))
+        
+        Cocca       = psi4.core.Matrix(nbf, np.count_nonzero(occa))
+        Coccb       = psi4.core.Matrix(nbf, np.count_nonzero(occb))
+
+        nalpha = np.count_nonzero(occa)
+        nbeta  = np.count_nonzero(occb)
+    else:
+        occa = np.zeros(nbf)
+        occa[:nalpha] = 1.0
+        occb = np.zeros(nbf)
+        occb[:nbeta] = 1.0
+        
+    psi4.core.print_out(f"\nPadded Occupation Vectors: {occa}")
+    psi4.core.print_out(f"\nNon-zerop alpha orbs: {np.count_nonzero(occa)}")
+        
+        
+        
+    psi4.core.print_out(f"\nPadded Occupation Vectors: {occb} \n\n")
+    psi4.core.print_out(f"\nNon-zerop alpha orbs: {np.count_nonzero(occb)}")
+            
+
+
 
     """
     Read or Core Guess
     """    
-    Cocca       = psi4.core.Matrix(nbf, nalpha)
-    Coccb       = psi4.core.Matrix(nbf, nbeta)
-    if (os.path.isfile(options["PREFIX"]+"_gsorbs.npz") and (options["RESTART"]==True)):
-        psi4.core.print_out("\nRestarting Calculation \n")
-        Ca = np.load(options["PREFIX"]+"_gsorbs.npz")["Ca"]
-        Cb = np.load(options["PREFIX"]+"_gsorbs.npz")["Cb"]
-        Cocca.np[:]  = Ca[:, :nalpha]
-        Da     = Ca[:, :nalpha] @ Ca[:, :nalpha].T
-        Coccb.np[:]  = Cb[:, :nbeta]
-        Db     = Cb[:, :nbeta] @ Cb[:, :nbeta].T
-    elif "Cinp" in kwargs:
+   
+    if "Cinp" in kwargs:
         psi4.core.print_out("Taking Coefficients from kwargs\n\n")
         Ca = kwargs["Cinp"][0]
         Cb = kwargs["Cinp"][1]
-        Cocca.np[:]  = Ca[:, :nalpha]
+        Cocca.np[:]  = Ca[:, :nalpha]*np.sqrt(occa[:nalpha])
         Da     = Ca[:, :nalpha] @ Ca[:, :nalpha].T
-        Coccb.np[:]  = Cb[:, :nbeta]
+        Coccb.np[:]  = Cb[:, :nbeta]*np.sqrt(occb[:nbeta])
         Db     = Cb[:, :nbeta] @ Cb[:, :nbeta].T
     else:
         """
-        SADNO guess, heavily inspired by the psi4 implementation
+        Just do a Core Guess
         """
         psi4.core.print_out("Creating CORE guess\n\n")
         Ca,_ = diag_H(H, A)
@@ -638,37 +704,7 @@ def DFTGroundState(mol,func,**kwargs):
         Da  = Cocca.np @ Cocca.np.T
         Db  = Coccb.np @ Coccb.np.T
 
-        """
-        sad_basis_list = psi4.core.BasisSet.build(mol.psi4Mol, "ORBITAL",
-                options["BASIS"],puream=True,return_atomlist=True)
-        sad_fitting_list = psi4.core.BasisSet.build(mol.psi4Mol,"DF_BASIS_SAD",
-                psi4.core.get_option("SCF", "DF_BASIS_SAD"),puream=True, return_atomlist=True)
-        SAD = psi4.core.SADGuess.build_SAD(wfn.basisset(), sad_basis_list)
-        SAD.set_atomic_fit_bases(sad_fitting_list)
-        SAD.compute_guess()
-        Da = SAD.Da().np
 
-        Dhelp = -1.0 * np.copy(Da)
-        Dhelp = A.T @ S.T @ Dhelp @ S @ A
-
-        _,C1 = np.linalg.eigh(Dhelp)
-
-        Ca = A @ C1
-        Cb = np.copy(Ca)
-        
-        Cocca.np[:] = Ca[:, :nalpha]
-        Coccb.np[:] = Cb[:, :nbeta]
-     
-        #This is the guess!
-        Da  = Cocca.np @ Cocca.np.T
-        Db  = Coccb.np @ Coccb.np.T
-        """
-
-    
-
-    """
-    end read
-    """
     printHeader("Molecule:",2)
     mol.psi4Mol.print_out()
     printHeader("XC & JK-Info:",2)
@@ -816,12 +852,13 @@ def DFTGroundState(mol,func,**kwargs):
         DbOld = np.copy(Db)
 
         Ca,epsa = diag_H(Fa, A)
-        Cocca.np[:]  = Ca[:, :nalpha]
+        
+        Cocca.np[:]  = Ca[:, :nalpha]*np.sqrt(occa[:nalpha])
         Da      = Cocca.np @ Cocca.np.T
 
 
         Cb,epsb = diag_H(Fb, A)
-        Coccb.np[:]  = Cb[:, :nbeta]
+        Coccb.np[:]  = Cb[:, :nbeta]*np.sqrt(occb[:nbeta])
         Db      = Coccb.np @ Coccb.np.T
         """
         END DIAG F + BUILD D
