@@ -7,7 +7,7 @@ import numpy as np
 from psi4.driver import qcdb
 from copy import deepcopy
 from vpot.calc.basis.augment import augmented_functions
-
+import os
 
 
 class myMolecule(object):
@@ -28,6 +28,9 @@ class myMolecule(object):
         self.basisDict = None
         self.orbitalDict = None
         self.augmentDict = None
+
+        if os.path.dirname(xyzFile)=="":
+            xyzFile = f"./{xyzFile}"
 
         self.xyzFile = xyzFile
         self.basisString = basisString
@@ -94,13 +97,7 @@ class myMolecule(object):
                 
                 
         mints = psi4.core.MintsHelper(self.basisSet)
-        self.xyzFile = xyzFile
-        self.basisString = basisString
-        self.geom, self.mass, self.elem, self.elez, self.uniq = mol.to_arrays()
-
-        #get center of mass, good for plotting
-        self.com = self.mass @ self.geom / self.mass.sum()
-        self.nElectrons = np.sum(self.elez)
+      
         self.ao_pot = mints.ao_potential().np
         self.ao_overlap = mints.ao_overlap().np
         self.ao_kinetic = mints.ao_kinetic().np

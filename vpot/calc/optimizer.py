@@ -434,6 +434,10 @@ class conventionalOptimizer():
     def __init__(self,pathToMolecule,orbitalBasisSet,functional, runMode=None):
         self.runMode = runMode
 
+        
+        if os.path.dirname(pathToMolecule)=="":
+            pathToMolecule = f"./{pathToMolecule}"
+
         self.pathToMolecule  = pathToMolecule
         self.path= os.path.dirname(pathToMolecule)
         

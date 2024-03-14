@@ -9,7 +9,7 @@ import numpy as np
 from vpot.calc.kshelper import diag_H,ACDIIS,Timer,printHeader,ACDIISRKS
 from vpot.calc.kshelper import DIIS_helper
 from vpot.calc.mol import myMolecule
-import os.path
+import os
 import time
 import logging
 import pdb
@@ -184,11 +184,13 @@ def constructSADGuess(M,func="PBE0",returnEnergies=False):
     atomicEnergies = {}
     currentOutput = psi4.core.get_output_file()
     for atom in uniqueElem:
-        with open("tmp.xyz","w") as f:
+        fname = f"{os.path.dirname(M.xyzFile)}/{np.random.randint(1E4,1E5)}.xyz"
+        with open(fname,"w") as f:
             f.write("1\n\n")
             f.write(f"{atom} 0.0 0.0 0.0")
-        A = myMolecule("tmp.xyz",M.basisString,M.augmentBasis)    
+        A = myMolecule(fname,M.basisString,M.augmentBasis)    
         res = DFTGroundState(A,func,GAMMA=0.25,OCCA=atomicOccupations[atom],OCCB=atomicOccupations[atom],OUT="/dev/null")
+        os.remove(fname)
         atomicDensities[atom] = (res['Da']+res['Db'])/2.0
         atomicEnergies[atom] = res['SCF_E']
 
