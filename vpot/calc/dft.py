@@ -339,7 +339,7 @@ def DFTGroundStateRKS(mol,func,**kwargs):
 
     elif options["GUESS"] == "SAD":
         psi4.core.print_out("Doing a SAD guess\n")
-        psi4.core.be_quit()
+        psi4.core.be_quiet()
         Pinit = constructSADGuess(mol)
         psi4.core.reopen_outfile()
         assert Pinit.shape == (nbf,nbf)
