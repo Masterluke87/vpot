@@ -20,6 +20,7 @@ def calcEnergyWithPerturbedDensity(M, Pinit, fac, diagFock=True, perturb=False,f
     The density cab be perturbed prior to the energy calculation
     Further a FOCK Matrix can be constructed and diagonalized
     """
+   
     mints = psi4.core.MintsHelper(M.basisSet)
     wfn   = psi4.core.Wavefunction.build(M.psi4Mol,M.basisSet)
     aux   = psi4.core.BasisSet.build(M.psi4Mol, "DF_BASIS_SCF", "", "JKFIT", M.basisString, puream=1 if wfn.basisset().has_puream() else 0)
@@ -191,7 +192,7 @@ def constructSADGuess(M,func="PBE0",returnEnergies=False):
         atomicDensities[atom] = (res['Da']+res['Db'])/2.0
         atomicEnergies[atom] = res['SCF_E']
 
-    psi4.core.set_output_file(currentOutput,True)
+   
 
     DGuess = block_diag(*[atomicDensities[x] for x in M.elem])
     EAtoms = [atomicEnergies[x] for x in M.elem]
@@ -205,8 +206,10 @@ def constructSADGuess(M,func="PBE0",returnEnergies=False):
     if returnEnergies:
         EAtoms = [atomicEnergies[x] for x in M.elem]
         ESad   =  calcEnergyWithPerturbedDensity(M, DNoOrth, 0.0, diagFock=False, perturb=False,func=func)
+        psi4.core.set_output_file(currentOutput,True)
         return (DNoOrth,EAtoms,ESad["E"])
     else:
+        psi4.core.set_output_file(currentOutput,True)
         return DNoOrth
 
 def getSADGuess(M):
