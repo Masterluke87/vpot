@@ -181,15 +181,18 @@ def constructSADGuess(M,func="PBE0",returnEnergies=False):
     uniqueElem = list(set(M.elem))
     atomicDensities = {}
     atomicEnergies = {}
-
+    currentOutput = psi4.core.get_output_file()
+    print(currentOutput)
     for atom in uniqueElem:
         with open("tmp.xyz","w") as f:
             f.write("1\n\n")
             f.write(f"{atom} 0.0 0.0 0.0")
         A = myMolecule("tmp.xyz",M.basisString,M.augmentBasis)    
-        res = DFTGroundState(A,func,GAMMA=0.25,OCCA=atomicOccupations[atom],OCCB=atomicOccupations[atom])
+        res = DFTGroundState(A,func,GAMMA=0.25,OCCA=atomicOccupations[atom],OCCB=atomicOccupations[atom],OUT="/dev/null")
         atomicDensities[atom] = (res['Da']+res['Db'])/2.0
         atomicEnergies[atom] = res['SCF_E']
+
+    psi4.core.set_output_file(currentOutput,True)
 
     DGuess = block_diag(*[atomicDensities[x] for x in M.elem])
     EAtoms = [atomicEnergies[x] for x in M.elem]
@@ -339,9 +342,7 @@ def DFTGroundStateRKS(mol,func,**kwargs):
 
     elif options["GUESS"] == "SAD":
         psi4.core.print_out("Doing a SAD guess\n")
-        psi4.core.be_quiet()
         Pinit = constructSADGuess(mol)
-        psi4.core.reopen_outfile()
         assert Pinit.shape == (nbf,nbf)
         #From here it is assumed that the density matrix is in the ordinary non-orthogonal basis
         #One should check if the trace of the Matrix is sufficiently close to the number of electron/2
