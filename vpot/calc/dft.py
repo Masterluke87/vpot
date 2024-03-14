@@ -181,13 +181,13 @@ def constructSADGuess(M,func="PBE0",returnEnergies=False):
     uniqueElem = list(set(M.elem))
     atomicDensities = {}
     atomicEnergies = {}
-    
+
     for atom in uniqueElem:
         with open("tmp.xyz","w") as f:
             f.write("1\n\n")
             f.write(f"{atom} 0.0 0.0 0.0")
         A = myMolecule("tmp.xyz",M.basisString,M.augmentBasis)    
-        res = DFTGroundState(A,func,GAMMA=0.25,OCCA=atomicOccupations[atom],OCCB=atomicOccupations[atom],OUT="/dev/null")
+        res = DFTGroundState(A,func,GAMMA=0.25,OCCA=atomicOccupations[atom],OCCB=atomicOccupations[atom])
         atomicDensities[atom] = (res['Da']+res['Db'])/2.0
         atomicEnergies[atom] = res['SCF_E']
 
@@ -339,7 +339,9 @@ def DFTGroundStateRKS(mol,func,**kwargs):
 
     elif options["GUESS"] == "SAD":
         psi4.core.print_out("Doing a SAD guess\n")
+        psi4.core.be_quit()
         Pinit = constructSADGuess(mol)
+        psi4.core.reopen_outfile()
         assert Pinit.shape == (nbf,nbf)
         #From here it is assumed that the density matrix is in the ordinary non-orthogonal basis
         #One should check if the trace of the Matrix is sufficiently close to the number of electron/2
