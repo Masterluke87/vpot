@@ -182,7 +182,6 @@ def constructSADGuess(M,func="PBE0",returnEnergies=False):
     atomicDensities = {}
     atomicEnergies = {}
     currentOutput = psi4.core.get_output_file()
-    print(currentOutput)
     for atom in uniqueElem:
         with open("tmp.xyz","w") as f:
             f.write("1\n\n")
