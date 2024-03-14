@@ -181,7 +181,7 @@ def constructSADGuess(M,func="PBE0",returnEnergies=False):
     uniqueElem = list(set(M.elem))
     atomicDensities = {}
     atomicEnergies = {}
-    psi4.core.be_quiet()
+    
     for atom in uniqueElem:
         with open("tmp.xyz","w") as f:
             f.write("1\n\n")
@@ -199,6 +199,7 @@ def constructSADGuess(M,func="PBE0",returnEnergies=False):
 
     vecsOcc = vecs[:,:int(M.nElectrons/2.0)]
     DNoOrth = vecsOcc @ vecsOcc.T
+
     if returnEnergies:
         EAtoms = [atomicEnergies[x] for x in M.elem]
         ESad   =  calcEnergyWithPerturbedDensity(M, DNoOrth, 0.0, diagFock=False, perturb=False,func=func)
